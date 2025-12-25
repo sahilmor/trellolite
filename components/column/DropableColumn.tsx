@@ -32,12 +32,20 @@ export default function DropableColumn({
   onCreateTask: (taskData: any) => Promise<void>;
   onEditColumn: (column: ColumnWithTasks) => void;
 }) {
-
-  const {setNodeRef, isOver} = useDroppable({id: column.id})
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
-    <div ref={setNodeRef} className={`w-full lg:shrink-0 lg:w-80 ${isOver ? "bg-blue-50 rounded-lg" : ""}`}>
-      <div className="bg-white rounded-lg shadow-sm border">
+    <div
+      ref={setNodeRef}
+      className={`w-full lg:shrink-0 lg:w-80 ${
+        isOver ? "bg-blue-50 rounded-lg" : ""
+      }`}
+    >
+      <div
+        className={`bg-white rounded-lg shadow-sm border ${
+          isOver ? "ring-2 ring-blue-300" : ""
+        }`}
+      >
         {/* column header */}
         <div className="p-3 sm:p-4 border-b">
           <div className="flex items-center justify-between">
@@ -49,7 +57,7 @@ export default function DropableColumn({
                 {column.tasks.length}
               </Badge>
             </div>
-            <Button variant={"ghost"} size={"sm"} className="shrink-0">
+            <Button variant={"ghost"} size={"sm"} className="shrink-0" onClick={() => onEditColumn(column)}>
               <MoreHorizontal />
             </Button>
           </div>

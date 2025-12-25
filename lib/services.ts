@@ -89,6 +89,23 @@ export const columnServices = {
 
     return data || [];
   },
+
+  async updateColumnTitle(
+    supabase: SupabaseClient,
+    columnId: string,
+    title: string
+  ): Promise<Column> {
+    const { data, error } = await supabase
+      .from("columns")
+      .update({ title, updated_at: new Date().toISOString() })
+      .eq("id", columnId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return data || [];
+  },
 };
 
 export const taskServices = {
