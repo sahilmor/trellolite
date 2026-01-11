@@ -19,12 +19,19 @@ export default function SupabaseProvider({
 }: {
     children: React.ReactNode;
 }) {
-    const { session } = useSession();
+    const { session, isLoaded: isClerkLoaded } = useSession();
     const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
     const [isLoaded, setIsLoading] = useState<boolean>(false)
 
     useEffect(() => {
-        if (!session) return;
+        if (!isClerkLoaded) return;
+
+        if (!session) {
+            setSupabase(null);
+            setIsLoading(true);
+            return;
+        }
+
         const client = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,7 +42,7 @@ export default function SupabaseProvider({
 
         setSupabase(client)
         setIsLoading(true)
-    }, [session]);
+    }, [session, isClerkLoaded]);
 
     return (
         <Context.Provider value={{ supabase, isLoaded }}>
