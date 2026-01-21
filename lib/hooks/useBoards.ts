@@ -54,7 +54,17 @@ export function useBoards() {
         }
     }
 
-    return { boards, loading, error, createBoard }
+    async function deleteBoard(boardId: string) {
+        if(!user) throw new Error("User not authenticated")
+        try {
+            await boardServices.deleteBoard(supabase!, boardId)
+            setBoards((prev) => prev.filter((board) => board.id !== boardId))
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to delete board.")
+        }
+    }
+
+    return { boards, loading, error, createBoard, deleteBoard }
 }
 
 export function useBoard(boardId: string) {
@@ -193,6 +203,16 @@ export function useBoard(boardId: string) {
             }
     }
 
+    async function deleteColumn(columnId: string) {
+            try {
+              await columnServices.deleteColumn(supabase!, columnId);
+
+              setColumns((prev) => prev.filter((col) => col.id !== columnId))
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to delete column.")
+            }
+    }
+
     return {
         board,
         columns,
@@ -203,7 +223,8 @@ export function useBoard(boardId: string) {
         setColumns,
         moveTask,
         createColumn,
-        updateColumn
+        updateColumn,
+        deleteColumn,
     }
 
 }

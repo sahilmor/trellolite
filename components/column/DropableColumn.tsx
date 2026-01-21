@@ -1,3 +1,5 @@
+"use client";
+
 import { ColumnWithTasks } from "@/lib/supabase/models";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +11,12 @@ import {
   DialogTitle,
   DialogHeader,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -21,17 +29,21 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useDroppable } from "@dnd-kit/core";
 
+interface DropableColumnProps {
+  column: ColumnWithTasks;
+  children: React.ReactNode;
+  onCreateTask: (e: any) => Promise<void>;
+  onEditColumn: (column: ColumnWithTasks) => void;
+  onDeleteColumn: (column: ColumnWithTasks) => void;
+}
+
 export default function DropableColumn({
   column,
   children,
   onCreateTask,
   onEditColumn,
-}: {
-  column: ColumnWithTasks;
-  children: React.ReactNode;
-  onCreateTask: (taskData: any) => Promise<void>;
-  onEditColumn: (column: ColumnWithTasks) => void;
-}) {
+  onDeleteColumn,
+}: DropableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
@@ -57,14 +69,31 @@ export default function DropableColumn({
                 {column.tasks.length}
               </Badge>
             </div>
-            <Button variant={"ghost"} size={"sm"} className="shrink-0" onClick={() => onEditColumn(column)}>
-              <MoreHorizontal />
-            </Button>
+
+            {/* Dropdown Menu for Edit/Delete */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant={"ghost"} size={"sm"} className="shrink-0 h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEditColumn(column)}>
+                  Edit Column
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onDeleteColumn(column)}
+                  className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                >
+                  Delete Column
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
         {/* column content */}
-
         <div className="p-2">
           {children}
 
@@ -74,7 +103,7 @@ export default function DropableColumn({
                 className="w-full mt-3 text-gray-500 hover:text-gray-700"
                 variant={"ghost"}
               >
-                <Plus />
+                <Plus className="mr-2 h-4 w-4" />
                 Add Task
               </Button>
             </DialogTrigger>
@@ -94,6 +123,7 @@ export default function DropableColumn({
                     id="title"
                     name="title"
                     placeholder="Enter task title"
+                    required
                   />
                 </div>
                 <div className="space-y-2">

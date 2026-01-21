@@ -1,8 +1,6 @@
 "use client";
 
-import Column from "@/components/column/DropableColumn";
 import Navbar from "@/components/shared/navbar";
-import TaskComp from "@/components/tasks/SortableTask";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,6 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,20 +56,31 @@ export default function BoardPage() {
     moveTask,
     createColumn,
     updateColumn,
+    deleteColumn, // Make sure your hook exports this
   } = useBoard(id);
 
+  // Board & UI State
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newColor, setNewColor] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isCreatingColumn, setIsCreatingColumn] = useState(false);
-  const [isEditingColumn, setIsEditingColumn] = useState(false);
-  const [editingColumn, setEditingColumn] = useState<ColumnWithTasks | null>(
-    null
-  );
-  const [newColumnTitle, setNewColumnTitle] = useState("");
-  const [editingColumnTitle, setEditingColumnTitle] = useState("");
+  
+  // Task State
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  // Column State
+  const [isCreatingColumn, setIsCreatingColumn] = useState(false);
+  
+  // Edit Column State
+  const [isEditingColumn, setIsEditingColumn] = useState(false);
+  const [editingColumn, setEditingColumn] = useState<ColumnWithTasks | null>(null);
+  const [editingColumnTitle, setEditingColumnTitle] = useState("");
+
+  // Delete Column State
+  const [isDeleteColumnDialogOpen, setIsDeleteColumnDialogOpen] = useState(false);
+  const [columnToDelete, setColumnToDelete] = useState<ColumnWithTasks | null>(null);
+  const [newColumnTitle, setNewColumnTitle] = useState("");
 
   const [filters, setFilters] = useState({
     priority: [] as string[],
@@ -133,7 +144,7 @@ export default function BoardPage() {
     await createRealTask(targetColumn.id, taskData);
   }
 
-  async function handleCreateTask(e: any) {
+  async function handleCreateTask(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     const formdata = new FormData(e.currentTarget);
@@ -148,14 +159,7 @@ export default function BoardPage() {
 
     if (taskData.title.trim()) {
       await createTask(taskData);
-
-      const trigger = document.querySelector(
-        '[data-state="open"]'
-      ) as HTMLElement;
-
-      if (trigger) {
-        trigger.click();
-      }
+      setIsTaskDialogOpen(false); // Cleanly close dialog
     }
   }
 
@@ -335,6 +339,19 @@ export default function BoardPage() {
     setEditingColumn(column);
     setEditingColumnTitle(column.title);
   }
+  
+  function handleDeleteColumn(column: ColumnWithTasks) {
+    setColumnToDelete(column);
+    setIsDeleteColumnDialogOpen(true);
+  }
+
+  async function confirmDeleteColumn() {
+    if (columnToDelete && deleteColumn) {
+      await deleteColumn(columnToDelete.id);
+    }
+    setIsDeleteColumnDialogOpen(false);
+    setColumnToDelete(null);
+  }
 
   const filteredColumns = columns.map((column) => ({
     ...column,
@@ -476,20 +493,6 @@ export default function BoardPage() {
                   ))}
                 </div>
               </div>
-
-              {/* <div className="space-y-2">
-                <Label>Assignee</Label>
-                <div className="flex items-center flex-wrap gap-2">
-                                {[
-                                    "low",
-                                    "medium",
-                                    "high",
-                                ].map((priority, key) => (
-                                    <Button key={key} variant={"outline"} size={"sm"}>{priority.charAt(0).toUpperCase() + priority.slice(1)}</Button>
-                                ))}
-                            </div>
-              </div> */}
-
               <div className="space-y-2">
                 <Label>Due Date</Label>
                 <Input
@@ -529,7 +532,7 @@ export default function BoardPage() {
             </div>
 
             {/* task dialog */}
-            <Dialog>
+            <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="w-full sm:w-auto">
                   <Plus />
@@ -552,6 +555,7 @@ export default function BoardPage() {
                       id="title"
                       name="title"
                       placeholder="Enter task title"
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -621,6 +625,7 @@ export default function BoardPage() {
                   column={column}
                   onCreateTask={handleCreateTask}
                   onEditColumn={handleEditColumn}
+                  onDeleteColumn={handleDeleteColumn}
                 >
                   <SortableContext
                     items={column.tasks.map((task) => task.id)}
@@ -654,6 +659,7 @@ export default function BoardPage() {
         </main>
       </div>
 
+      {/* Create Column Dialog */}
       <Dialog open={isCreatingColumn} onOpenChange={setIsCreatingColumn}>
         <DialogContent className="w-[95vw] max-w-106.25 mx-auto">
           <DialogHeader>
@@ -687,6 +693,7 @@ export default function BoardPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Column Dialog */}
       <Dialog open={isEditingColumn} onOpenChange={setIsEditingColumn}>
         <DialogContent className="w-[95vw] max-w-106.25 mx-auto">
           <DialogHeader>
@@ -721,6 +728,29 @@ export default function BoardPage() {
               <Button type="submit">Edit Column</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* NEW: Delete Column Dialog */}
+      <Dialog open={isDeleteColumnDialogOpen} onOpenChange={setIsDeleteColumnDialogOpen}>
+        <DialogContent className="w-[95vw] max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle>Delete Column</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the column "{columnToDelete?.title}"? All tasks within this column will also be deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex space-x-2 justify-end">
+            <Button
+              variant={"outline"}
+              onClick={() => setIsDeleteColumnDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteColumn}>
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

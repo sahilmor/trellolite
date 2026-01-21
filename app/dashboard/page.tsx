@@ -15,6 +15,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,13 +27,13 @@ import { useUser } from "@clerk/nextjs";
 import {
   AlignEndHorizontal,
   Filter,
-  GitGraph,
   Grid3X3,
   List,
   Loader2,
   Plus,
   Rocket,
   Search,
+  Trash2,
   Trello,
 } from "lucide-react";
 import Link from "next/link";
@@ -41,11 +43,19 @@ import { useState } from "react";
 export default function DashboardPage() {
   const { user } = useUser();
   const { isFreeUser } = usePlan();
-  const router = useRouter()
-  const { createBoard, boards, loading, error } = useBoards();
+  const router = useRouter();
+  const { createBoard, boards, loading, error, deleteBoard } = useBoards();
+  
+  // UI State
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
   const [showUpgradeDialog, setShowUpgradeDialog] = useState<boolean>(false);
+  
+  // Delete Logic State
+  const [deleteBoardDialogOpen, setDeleteBoardDialogOpen] = useState<boolean>(false);
+  const [boardToDelete, setBoardToDelete] = useState<string | null>(null);
+
+  // Filter State
   const [filters, setFilters] = useState({
     search: "",
     dateRange: {
@@ -60,7 +70,6 @@ export default function DashboardPage() {
 
   const canCreateBoard = !isFreeUser || boards.length < 1;
 
-
   const boardsWithTaskCount = boards.map((board: Board) => ({
     ...board,
     taskCount: 0,
@@ -73,50 +82,70 @@ export default function DashboardPage() {
 
     const matchesDateRange =
       (!filters.dateRange.start ||
-      new Date(board.created_at) >= new Date(filters.dateRange.start)) &&
+        new Date(board.created_at) >= new Date(filters.dateRange.start)) &&
       (!filters.dateRange.end ||
-      new Date(board.created_at) <= new Date(filters.dateRange.end))
-
+        new Date(board.created_at) <= new Date(filters.dateRange.end));
 
     return matchesSearch && matchesDateRange;
   });
 
   function clearFilter() {
     setFilters({
-    search: "",
-    dateRange: {
-      start: null as string | null,
-      end: null as string | null,
-    },
-    taskCount: {
-      min: null as number | null,
-      max: null as number | null,
-    },
-  })
+      search: "",
+      dateRange: {
+        start: null as string | null,
+        end: null as string | null,
+      },
+      taskCount: {
+        min: null as number | null,
+        max: null as number | null,
+      },
+    });
   }
 
   const handleCreateBoard = async () => {
-    if(!canCreateBoard) {
-        setShowUpgradeDialog(true);
+    if (!canCreateBoard) {
+      setShowUpgradeDialog(true);
+      return;
     }
     await createBoard({
       title: "New Board",
     });
   };
 
-  // if (loading) {
-  //     return (
-  //         <div>
-  //             <Loader2 />
-  //             <span>Loading Your boards...</span>
-  //         </div>
-  //     )
-  // }
+  // --- DELETE LOGIC START ---
+
+  // 1. Triggered when clicking the Trash Icon
+  const handleDeleteClick = (e: React.MouseEvent, boardId: string) => {
+    e.preventDefault(); // Stop Link navigation
+    e.stopPropagation(); // Stop bubbling
+    setBoardToDelete(boardId); // Store the ID to delete later
+    setDeleteBoardDialogOpen(true); // Open the popup
+  };
+
+  // 2. Triggered when clicking "Delete" inside the popup
+  const confirmDeleteBoard = async () => {
+    if (boardToDelete) {
+      await deleteBoard(boardToDelete);
+      setDeleteBoardDialogOpen(false);
+      setBoardToDelete(null);
+    }
+  };
+  // --- DELETE LOGIC END ---
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh]">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-600 mb-2" />
+        <span>Loading Your boards...</span>
+      </div>
+    );
+  }
 
   if (error) {
     return (
-      <div>
-        <h2>Error loading boards</h2>
+      <div className="p-8 text-center">
+        <h2 className="text-red-600 font-bold">Error loading boards</h2>
         <p>{error}</p>
       </div>
     );
@@ -203,21 +232,21 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs sm:text-sm font-medium text-gray-600">
-                    Active Projects
+                    Team Velocity
                   </p>
                   <p className="text-xl sm:text-2xl font-bold text-gray-900">
                     {boards.length}
                   </p>
                 </div>
-                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <Rocket className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
+                <div className="h-10 w-10 sm:h-12 sm:w-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <Rocket className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Boards */}
+        {/* Boards Section */}
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:mb-6 space-y-4 sm:space-y-0">
             <div>
@@ -227,7 +256,9 @@ export default function DashboardPage() {
               <p className="text-gray-600">Manage your projects and tasks.</p>
 
               {isFreeUser && (
-                <p className="text-sm text-gray-500 mt-1">Free Plan: {boards.length}/1 boards used.</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Free Plan: {boards.length}/1 boards used.
+                </p>
               )}
             </div>
 
@@ -265,7 +296,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Searc bar */}
+          {/* Search bar */}
           <div className="relative mb-4 sm:mb-6">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
@@ -278,37 +309,43 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Board Grid/List */}
+          {/* Board Grid/List Render */}
           {boards.length === 0 ? (
-            <div>No Boards Yet</div>
+            <div className="text-center py-10 text-gray-500">
+              No Boards Yet. Create one to get started!
+            </div>
           ) : viewMode === "grid" ? (
+            /* GRID VIEW */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {filteredBoards.map((board, key) => (
                 <Link key={key} href={`/boards/${board.id}`}>
-                  <Card className="group hover:shadow-lg transition-shadow cursor-pointer">
+                  <Card className="group hover:shadow-lg transition-shadow cursor-pointer relative h-full flex flex-col">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <div className={`w-4 h-4 ${board.color} rounded`} />
-                        <Badge className="text-xs" variant="secondary">
-                          New
-                        </Badge>
+                        
+                        {/* Delete Button - Using handleDeleteClick to stop propagation */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="ml-auto hover:bg-red-100 hover:text-red-600 z-10"
+                          onClick={(e) => handleDeleteClick(e, board.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </CardHeader>
-                    <CardContent className="p-4 sm:p-6">
+                    <CardContent className="p-4 sm:p-6 grow">
                       <CardTitle className="text-base sm:text-lg mb-2 group-hover:text-blue-600 transition-colors">
                         {board.title}
                       </CardTitle>
-                      <CardDescription className="text-xs mb-4">
+                      <CardDescription className="text-xs mb-4 line-clamp-2">
                         {board.description}
                       </CardDescription>
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 space-y-1 sm:space-y-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 space-y-1 sm:space-y-0 mt-auto">
                         <span>
                           Created{" "}
                           {new Date(board.created_at).toLocaleDateString()}
-                        </span>
-                        <span>
-                          Updated{" "}
-                          {new Date(board.updated_at).toLocaleDateString()}
                         </span>
                       </div>
                     </CardContent>
@@ -316,8 +353,11 @@ export default function DashboardPage() {
                 </Link>
               ))}
 
-              <Card className="border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors cursor-pointer group">
-                <CardContent className="p-4 sm:p-6 flex flex-col items-center justify-center h-full min-h-50">
+              <Card
+                onClick={handleCreateBoard}
+                className="border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors cursor-pointer group flex flex-col items-center justify-center min-h-50"
+              >
+                <CardContent className="p-4 sm:p-6 flex flex-col items-center justify-center text-center">
                   <Plus className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400 group-hover:text-blue-600 mb-2" />
                   <p className="text-sm sm:text-base text-gray-600 group-hover:text-blue-600 font-medium">
                     Create New Board
@@ -326,31 +366,46 @@ export default function DashboardPage() {
               </Card>
             </div>
           ) : (
+            /* LIST VIEW */
             <div>
-              {boards.map((board, key) => (
+              {filteredBoards.map((board, key) => (
                 <div key={key} className={key > 0 ? "mt-4" : ""}>
                   <Link href={`/boards/${board.id}`}>
                     <Card className="group hover:shadow-lg transition-shadow cursor-pointer mb-4">
                       <CardHeader className="pb-3">
                         <div className="flex items-center justify-between">
-                          <div className={`w-4 h-4 ${board.color} rounded`} />
-                          <Badge className="text-xs" variant="secondary">
-                            New
-                          </Badge>
+                          <div className="flex items-center gap-3">
+                            <div className={`w-4 h-4 ${board.color} rounded`} />
+                            <CardTitle className="text-base sm:text-lg group-hover:text-blue-600 transition-colors">
+                              {board.title}
+                            </CardTitle>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            {/* <Badge className="text-xs" variant="secondary">
+                              New
+                            </Badge> */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="hover:bg-red-100 hover:text-red-600 z-10"
+                              onClick={(e) => handleDeleteClick(e, board.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="p-4 sm:p-6">
-                        <CardTitle className="text-base sm:text-lg mb-2 group-hover:text-blue-600 transition-colors">
-                          {board.title}
-                        </CardTitle>
-                        <CardDescription className="text-xs mb-4">
+                      <CardContent className="p-4 sm:pt-0 sm:p-6">
+                        <CardDescription className="text-xs mb-2">
                           {board.description}
                         </CardDescription>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500 space-y-1 sm:space-y-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center text-xs text-gray-500 space-y-1 sm:space-y-0">
                           <span>
                             Created{" "}
                             {new Date(board.created_at).toLocaleDateString()}
                           </span>
+                          <span className="hidden sm:inline mx-2">•</span>
                           <span>
                             Updated{" "}
                             {new Date(board.updated_at).toLocaleDateString()}
@@ -362,12 +417,17 @@ export default function DashboardPage() {
                 </div>
               ))}
 
-              <Card className="mt-4 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors cursor-pointer group">
-                <CardContent className="p-4 sm:p-6 flex flex-col items-center justify-center h-full min-h-50">
-                  <Plus className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400 group-hover:text-blue-600 mb-2" />
-                  <p className="text-sm sm:text-base text-gray-600 group-hover:text-blue-600 font-medium">
-                    Create New Board
-                  </p>
+              <Card 
+                onClick={handleCreateBoard}
+                className="mt-4 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors cursor-pointer group"
+              >
+                <CardContent className="p-4 sm:p-6 flex flex-col items-center justify-center h-full min-h-24">
+                  <div className="flex items-center gap-2">
+                    <Plus className="h-5 w-5 text-gray-400 group-hover:text-blue-600" />
+                    <p className="text-sm text-gray-600 group-hover:text-blue-600 font-medium">
+                      Create New Board
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -375,27 +435,24 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* filter dialog */}
+      {/* Filter Dialog */}
       <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
         <DialogContent className="w-[95vw] max-w-106.25 mx-auto">
           <DialogHeader>
             <DialogTitle>Filter Boards</DialogTitle>
-            <p className="text-sm text-gray-600">
+            <DialogDescription className="text-sm text-gray-600">
               Filter boards by title, date, or task count.
-            </p>
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* <div className="space-y-2">
-                <Label className="text-xs">Search</Label>
-                <Input id="search" placeholder="Search Board titles..." />
-              </div> */}
             <div className="space-y-2">
               <Label className="text-xs">Date Range</Label>
-              <div className="grid grid-cols sm:grid-cols-2">
+              <div className="grid grid-cols sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs">Start Date</Label>
                   <Input
                     type="date"
+                    value={filters.dateRange.start || ""}
                     onChange={(e) =>
                       setFilters((prev) => ({
                         ...prev,
@@ -411,6 +468,7 @@ export default function DashboardPage() {
                   <Label className="text-xs">End Date</Label>
                   <Input
                     type="date"
+                    value={filters.dateRange.end || ""}
                     onChange={(e) =>
                       setFilters((prev) => ({
                         ...prev,
@@ -426,13 +484,14 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-2">
               <Label className="text-xs">Task Count</Label>
-              <div className="grid grid-cols sm:grid-cols-2">
+              <div className="grid grid-cols sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs">Minimum</Label>
                   <Input
                     type="number"
                     min="0"
                     placeholder="Min task"
+                    value={filters.taskCount.min || ""}
                     onChange={(e) =>
                       setFilters((prev) => ({
                         ...prev,
@@ -450,6 +509,7 @@ export default function DashboardPage() {
                     type="number"
                     min="0"
                     placeholder="Max tasks"
+                    value={filters.taskCount.max || ""}
                     onChange={(e) =>
                       setFilters((prev) => ({
                         ...prev,
@@ -464,26 +524,64 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row justify-between p-4 space-y-2 sm:space-y-0 sm:space-x-2">
-              <Button variant={"outline"} onClick={clearFilter}>Clear Filters</Button>
-              <Button onClick={() => setIsFilterOpen(false)}>Apply Filters</Button>
+            <div className="flex flex-col sm:flex-row justify-between pt-4 space-y-2 sm:space-y-0 sm:space-x-2">
+              <Button variant={"outline"} onClick={clearFilter}>
+                Clear Filters
+              </Button>
+              <Button onClick={() => setIsFilterOpen(false)}>
+                Apply Filters
+              </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-    <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+      {/* Upgrade Dialog */}
+      <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
         <DialogContent className="w-[95vw] max-w-106.25 mx-auto">
           <DialogHeader>
             <DialogTitle>Upgrade to Create More Boards</DialogTitle>
-            <p className="text-sm text-gray-600">
-              Free users can only create one board. Upgrade to Pro or Enterprise plan to create unlimited boards.
-            </p>
+            <DialogDescription>
+              Free users can only create one board. Upgrade to Pro or Enterprise
+              plan to create unlimited boards.
+            </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end space-x-4 pt-4">
-            <Button variant={"outline"} onClick={() => setShowUpgradeDialog(false)}>Cancel</Button>
+            <Button
+              variant={"outline"}
+              onClick={() => setShowUpgradeDialog(false)}
+            >
+              Cancel
+            </Button>
             <Button onClick={() => router.push("/pricing")}>View Plans</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteBoardDialogOpen}
+        onOpenChange={setDeleteBoardDialogOpen}
+      >
+        <DialogContent className="w-[95vw] max-w-md mx-auto">
+          <DialogHeader>
+            <DialogTitle>Delete Board</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this board? This action cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row justify-end space-x-2 pt-4">
+            <Button
+              variant={"outline"}
+              onClick={() => setDeleteBoardDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteBoard}>
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
