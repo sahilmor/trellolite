@@ -143,34 +143,63 @@ export function useBoard(boardId: string) {
       newColumnId: string,
       newOrder: number
     ) {
+      const originalColumns = [...columns]; 
+
+      setColumns((prev) => {
+        const sourceColumn = prev.find((col) =>
+          col.tasks.some((t) => t.id === taskId)
+        );
+        const targetColumn = prev.find((col) => col.id === newColumnId);
+
+        if (!sourceColumn || !targetColumn) {
+            return prev;
+        }
+
+        const task = sourceColumn.tasks.find((t) => t.id === taskId);
+        if (!task) return prev;
+
+        const updatedTask = { ...task, column_id: newColumnId };
+
+        if (sourceColumn.id === newColumnId) {
+          const newTasks = [...sourceColumn.tasks];
+          const oldIndex = newTasks.findIndex((t) => t.id === taskId);
+          
+          newTasks.splice(oldIndex, 1);
+          newTasks.splice(newOrder, 0, updatedTask); 
+
+          return prev.map((col) =>
+            col.id === sourceColumn.id ? { ...col, tasks: newTasks } : col
+          );
+        }
+
+        return prev.map((col) => {
+          if (col.id === sourceColumn.id) {
+            return {
+              ...col,
+              tasks: col.tasks.filter((t) => t.id !== taskId),
+            };
+          }
+          if (col.id === targetColumn.id) {
+            const newTasks = [...col.tasks];
+            if (!newTasks.find(t => t.id === taskId)) {
+                 newTasks.splice(newOrder, 0, updatedTask);
+            }
+            return {
+              ...col,
+              tasks: newTasks,
+            };
+          }
+          return col;
+        });
+      });
+
       try {
         await taskServices.moveTask(supabase!, taskId, newColumnId, newOrder);
-
-        setColumns((prev) => {
-            const newColumns = [...prev];
-
-            let taskToMove: Task | null = null;
-            for(const col of newColumns) {
-                const taskIndex = col.tasks.findIndex((task) => task.id === taskId);
-
-                if(taskIndex !== -1) {
-                    taskToMove = col.tasks[taskIndex];
-                    col.tasks.splice(taskIndex, 1);
-                    break;
-                }
-            }
-
-            if(taskToMove) {
-                const targetColumn = newColumns.find((col) => col.id === newColumnId);
-                if(targetColumn) {
-                    targetColumn.tasks.splice(newOrder, 0, taskToMove)
-                }
-            }
-
-            return newColumns;
-        })
-      } catch(err){
-        setError(err instanceof Error ? err.message : "Failed to move the task.")
+      } catch (err) {
+        setColumns(originalColumns);
+        setError(
+          err instanceof Error ? err.message : "Failed to move the task."
+        );
       }
     }
 

@@ -56,28 +56,24 @@ export default function BoardPage() {
     moveTask,
     createColumn,
     updateColumn,
-    deleteColumn, // Make sure your hook exports this
+    deleteColumn,
   } = useBoard(id);
 
-  // Board & UI State
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newColor, setNewColor] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
-  // Task State
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [dragStartPos, setDragStartPos] = useState<{ colId: string; index: number } | null>(null);
 
-  // Column State
   const [isCreatingColumn, setIsCreatingColumn] = useState(false);
   
-  // Edit Column State
   const [isEditingColumn, setIsEditingColumn] = useState(false);
   const [editingColumn, setEditingColumn] = useState<ColumnWithTasks | null>(null);
   const [editingColumnTitle, setEditingColumnTitle] = useState("");
 
-  // Delete Column State
   const [isDeleteColumnDialogOpen, setIsDeleteColumnDialogOpen] = useState(false);
   const [columnToDelete, setColumnToDelete] = useState<ColumnWithTasks | null>(null);
   const [newColumnTitle, setNewColumnTitle] = useState("");
@@ -159,18 +155,18 @@ export default function BoardPage() {
 
     if (taskData.title.trim()) {
       await createTask(taskData);
-      setIsTaskDialogOpen(false); // Cleanly close dialog
+      setIsTaskDialogOpen(false);
     }
   }
 
   function handleDragStart(event: DragStartEvent) {
     const taskId = event.active.id as string;
-    const task = columns
-      .flatMap((col) => col.tasks)
-      .find((task) => task.id === taskId);
+    const sourceCol = columns.find(col => col.tasks.some(t => t.id === taskId));
 
-    if (task) {
-      setActiveTask(task);
+    if (sourceCol) {
+        const index = sourceCol.tasks.findIndex(t => t.id === taskId);
+        setDragStartPos({ colId: sourceCol.id, index });
+        setActiveTask(sourceCol.tasks[index]);
     }
   }
 
@@ -181,19 +177,16 @@ export default function BoardPage() {
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    // Find the source and target columns
     const sourceColumn = columns.find((col) =>
       col.tasks.some((task) => task.id === activeId)
     );
 
-    // Target might be a column itself (if empty) or a task within a column
     const targetColumn = columns.find(
       (col) => col.id === overId || col.tasks.some((task) => task.id === overId)
     );
 
     if (!sourceColumn || !targetColumn) return;
 
-    // SCENARIO 1: Dragging to a DIFFERENT column
     if (sourceColumn.id !== targetColumn.id) {
       setColumns((prev) => {
         const activeItems = sourceColumn.tasks;
@@ -204,8 +197,6 @@ export default function BoardPage() {
         let newIndex;
 
         if (overItems.some((t) => t.id === overId)) {
-          // We are hovering over another task in the target column
-          // Calculate if we are above or below the target task
           const isBelowOverItem =
             over &&
             active.rect.current.translated &&
@@ -215,24 +206,20 @@ export default function BoardPage() {
           const modifier = isBelowOverItem ? 1 : 0;
           newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length;
         } else {
-          // We are hovering over the empty column container
           newIndex = overItems.length;
         }
 
         return prev.map((col) => {
-          // Remove from source column
           if (col.id === sourceColumn.id) {
             return {
               ...col,
               tasks: col.tasks.filter((t) => t.id !== activeId),
             };
           }
-          // Add to target column
           else if (col.id === targetColumn.id) {
             const newTasks = [...col.tasks];
             const taskToMove = activeTask || sourceColumn.tasks[activeIndex];
 
-            // Only add if it's not already there (prevents flickering)
             if (!newTasks.find((t) => t.id === activeId) && taskToMove) {
               newTasks.splice(newIndex, 0, taskToMove);
             }
@@ -245,7 +232,6 @@ export default function BoardPage() {
         });
       });
     }
-    // SCENARIO 2: Reordering within the SAME column
     else {
       const activeIndex = sourceColumn.tasks.findIndex(
         (t) => t.id === activeId
@@ -270,45 +256,26 @@ export default function BoardPage() {
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-
-    if (!over) return;
-
     const taskId = active.id as string;
-    const overId = over.id as string;
 
-    const targetColumn = columns.find((col) => col.id === overId);
+    setActiveTask(null);
 
-    if (targetColumn) {
-      const sourceColumn = columns.find((col) =>
-        col.tasks.some((task) => task.id === taskId)
-      );
-
-      if (sourceColumn && sourceColumn.id !== targetColumn.id) {
-        await moveTask(taskId, targetColumn.id, targetColumn.tasks.length);
-      }
-    } else {
-      const sourceColumn = columns.find((col) =>
-        col.tasks.some((task) => task.id === taskId)
-      );
-
-      const targetColumn = columns.find((col) =>
-        col.tasks.some((task) => task.id === overId)
-      );
-
-      if (sourceColumn && targetColumn) {
-        const oldIndex = sourceColumn.tasks.findIndex(
-          (task) => task.id === taskId
-        );
-
-        const newIndex = targetColumn.tasks.findIndex(
-          (task) => task.id === overId
-        );
-
-        if (oldIndex !== newIndex) {
-          await moveTask(taskId, targetColumn.id, newIndex);
-        }
-      }
+    if (!over || !dragStartPos) {
+        setDragStartPos(null);
+        return;
     }
+
+    const finalColumn = columns.find((col) => col.tasks.some((t) => t.id === taskId));
+
+    if (finalColumn) {
+        const finalIndex = finalColumn.tasks.findIndex((t) => t.id === taskId);
+        
+        if (finalColumn.id !== dragStartPos.colId || finalIndex !== dragStartPos.index) {
+            await moveTask(taskId, finalColumn.id, finalIndex);
+        }
+    }
+    
+    setDragStartPos(null);
   }
 
   async function handleCreateColumn(e: React.FormEvent) {
@@ -360,7 +327,6 @@ export default function BoardPage() {
       if(filters.priority.length > 0 && !filters.priority.includes(task.priority)) {
         return false;
       }
-
 
       if(filters.dueDate && task.due_date) {
         const taskDate = new Date(task.due_date).toDateString()
@@ -520,9 +486,7 @@ export default function BoardPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Board Content */}
         <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6">
-          {/* stats */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 space-y-4 sm:space-y-0">
             <div className="flex flex-wrap items-center gap-4 sm:gap-6">
               <div className="text-xs text-gray-600">
@@ -531,7 +495,6 @@ export default function BoardPage() {
               </div>
             </div>
 
-            {/* task dialog */}
             <Dialog open={isTaskDialogOpen} onOpenChange={setIsTaskDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="w-full sm:w-auto">
@@ -605,7 +568,6 @@ export default function BoardPage() {
             </Dialog>
           </div>
 
-          {/* board columns */}
           <DndContext
             sensors={sensors}
             collisionDetection={rectIntersection}
@@ -659,7 +621,6 @@ export default function BoardPage() {
         </main>
       </div>
 
-      {/* Create Column Dialog */}
       <Dialog open={isCreatingColumn} onOpenChange={setIsCreatingColumn}>
         <DialogContent className="w-[95vw] max-w-106.25 mx-auto">
           <DialogHeader>
@@ -693,7 +654,6 @@ export default function BoardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Column Dialog */}
       <Dialog open={isEditingColumn} onOpenChange={setIsEditingColumn}>
         <DialogContent className="w-[95vw] max-w-106.25 mx-auto">
           <DialogHeader>
@@ -731,7 +691,6 @@ export default function BoardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* NEW: Delete Column Dialog */}
       <Dialog open={isDeleteColumnDialogOpen} onOpenChange={setIsDeleteColumnDialogOpen}>
         <DialogContent className="w-[95vw] max-w-md mx-auto">
           <DialogHeader>
