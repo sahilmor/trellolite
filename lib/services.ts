@@ -172,8 +172,16 @@ export const taskServices = {
       .from("tasks")
       .update({ column_id: newColumnId, sort_order: newOrder, updated_at: new Date().toISOString() })
       .eq("id", taskId)
+      .select();
 
-    if (error) throw error;
+    if (error) {
+        throw error;
+    }
+
+
+    if (!data || data.length === 0) {
+       throw new Error("Task not found or access denied");
+    }
 
     return data || [];
   },
