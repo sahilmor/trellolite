@@ -187,16 +187,17 @@ export default function BoardPage() {
 
     if (!sourceColumn || !targetColumn) return;
 
+    // Moving between DIFFERENT columns
     if (sourceColumn.id !== targetColumn.id) {
       setColumns((prev) => {
         const activeItems = sourceColumn.tasks;
         const overItems = targetColumn.tasks;
         const activeIndex = activeItems.findIndex((t) => t.id === activeId);
-        const overIndex = overItems.findIndex((t) => t.id === overId);
-
+        
+        // Calculate new index
         let newIndex;
-
         if (overItems.some((t) => t.id === overId)) {
+          const overIndex = overItems.findIndex((t) => t.id === overId);
           const isBelowOverItem =
             over &&
             active.rect.current.translated &&
@@ -232,11 +233,18 @@ export default function BoardPage() {
         });
       });
     }
+    // Moving inside SAME column
     else {
       const activeIndex = sourceColumn.tasks.findIndex(
         (t) => t.id === activeId
       );
       const overIndex = sourceColumn.tasks.findIndex((t) => t.id === overId);
+
+      // --- CRITICAL FIX START ---
+      // If overIndex is -1, it means we are hovering over the column container, not a task.
+      // We should ignore this to prevent the "Maximum update depth exceeded" crash.
+      if (overIndex === -1) return;
+      // --- CRITICAL FIX END ---
 
       if (activeIndex !== overIndex) {
         setColumns((prev) => {
