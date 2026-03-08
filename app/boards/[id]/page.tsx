@@ -44,6 +44,7 @@ import DropableColumn from "@/components/column/DropableColumn";
 import SortableTask from "@/components/tasks/SortableTask";
 import { ColumnWithTasks, Task } from "@/lib/supabase/models";
 import TaskOverlay from "@/components/tasks/TaskOverlay";
+import TaskModal from "@/components/tasks/TaskModal"
 
 export default function BoardPage() {
   const { id } = useParams<{ id: string }>();
@@ -54,6 +55,8 @@ export default function BoardPage() {
     createRealTask,
     setColumns,
     moveTask,
+    deleteTask,
+    updateTask,
     createColumn,
     updateColumn,
     deleteColumn,
@@ -77,6 +80,9 @@ export default function BoardPage() {
   const [isDeleteColumnDialogOpen, setIsDeleteColumnDialogOpen] = useState(false);
   const [columnToDelete, setColumnToDelete] = useState<ColumnWithTasks | null>(null);
   const [newColumnTitle, setNewColumnTitle] = useState("");
+
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
   const [filters, setFilters] = useState({
     priority: [] as string[],
@@ -363,7 +369,7 @@ export default function BoardPage() {
           filterCount={Object.values(filters).reduce(
             (count, v) =>
               count + (Array.isArray(v) ? v.length : v !== null ? 1 : 0),
-            0
+            0,
           )}
         />
 
@@ -447,7 +453,7 @@ export default function BoardPage() {
                     <Button
                       onClick={() => {
                         const newPriorities = filters.priority.includes(
-                          priority
+                          priority,
                         )
                           ? filters.priority.filter((p) => p !== priority)
                           : [...filters.priority, priority];
@@ -603,7 +609,15 @@ export default function BoardPage() {
                   >
                     <div className="space-y-3">
                       {column.tasks.map((task, key) => (
-                        <SortableTask task={task} key={key}></SortableTask>
+                        <SortableTask
+                          task={task}
+                          key={key}
+                          onDelete={deleteTask}
+                          onClick={() => {
+                            setSelectedTask(task);
+                            setIsTaskModalOpen(true);
+                          }}
+                        ></SortableTask>
                       ))}
                     </div>
                   </SortableContext>
@@ -699,12 +713,17 @@ export default function BoardPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isDeleteColumnDialogOpen} onOpenChange={setIsDeleteColumnDialogOpen}>
+      <Dialog
+        open={isDeleteColumnDialogOpen}
+        onOpenChange={setIsDeleteColumnDialogOpen}
+      >
         <DialogContent className="w-[95vw] max-w-md mx-auto">
           <DialogHeader>
             <DialogTitle>Delete Column</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete the column "{columnToDelete?.title}"? All tasks within this column will also be deleted.
+              Are you sure you want to delete the column "
+              {columnToDelete?.title}"? All tasks within this column will also
+              be deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex space-x-2 justify-end">
@@ -720,6 +739,19 @@ export default function BoardPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TaskModal
+  task={selectedTask}
+  open={isTaskModalOpen}
+  onUpdateTask={async (taskId, updates) => {
+    await updateTask(taskId, updates);
+    setSelectedTask((prev) => prev ? { ...prev, ...updates } : null);
+  }}
+  onClose={() => {
+    setIsTaskModalOpen(false)
+    setSelectedTask(null)
+  }}
+/>
     </>
   );
 }

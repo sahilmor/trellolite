@@ -35,3 +35,28 @@ export interface Task {
     updated_at: string;
 }
 
+export interface Comment {
+  id: string
+  task_id: string
+  user_id: string
+  content: string
+  created_at: string
+  users?: UserProfile
+}
+
+export interface TaskActivity {
+  id: string
+  task_id: string
+  user_id: string
+  action: string
+  metadata?: any
+  created_at: string
+  users?: UserProfile
+}
+
+export interface UserProfile {
+  id: string
+  name: string
+  email?: string
+  image_url?: string
+}

@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { useSession } from "@clerk/nextjs";
+import { syncUser } from "@/lib/services/userServices"
+import { useUser } from "@clerk/nextjs"
 
 type SupabaseContext = {
     supabase: SupabaseClient | null;
@@ -22,6 +24,8 @@ export default function SupabaseProvider({
     const { session, isLoaded: isClerkLoaded } = useSession();
     const [supabase, setSupabase] = useState<SupabaseClient | null>(null)
     const [isLoaded, setIsLoading] = useState<boolean>(false)
+
+    const { user } = useUser()
 
     useEffect(() => {
         if (!isClerkLoaded) return;
@@ -43,6 +47,13 @@ export default function SupabaseProvider({
         setSupabase(client)
         setIsLoading(true)
     }, [session, isClerkLoaded]);
+
+    useEffect(() => {
+  if (!user || !supabase) return
+
+  syncUser(supabase, user)
+
+}, [user])
 
     return (
         <Context.Provider value={{ supabase, isLoaded }}>

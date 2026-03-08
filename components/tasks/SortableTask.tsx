@@ -2,10 +2,19 @@ import { Task } from "@/lib/supabase/models";
 import { Card, CardContent } from "../ui/card";
 import { Calendar, User } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities"
+import { CSS } from "@dnd-kit/utilities";
+import { Trash2 } from "lucide-react";
+import UserAvatar from "../ui/user-avatar";
 
-export default function SortableTask({ task }: { task: Task }) {
-
+export default function SortableTask({
+  task,
+  onDelete,
+  onClick,
+}: {
+  task: Task;
+  onDelete: (taskId: string) => void;
+  onClick: () => void;
+}) {
   const {
     attributes,
     listeners,
@@ -19,8 +28,7 @@ export default function SortableTask({ task }: { task: Task }) {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    
-  }
+  };
 
   function getPriorityColor(priority: "low" | "medium" | "high"): string {
     switch (priority) {
@@ -35,7 +43,13 @@ export default function SortableTask({ task }: { task: Task }) {
     }
   }
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes} style={styles}>
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={styles}
+      onClick={onClick}
+    >
       <Card className="cursor-pointer hover:shadow-md transition-shadows">
         <CardContent className="p-3 sm:p-4">
           <div className="space-y-2 sm:space-y-3">
@@ -44,6 +58,16 @@ export default function SortableTask({ task }: { task: Task }) {
               <h4 className="font-medium text-gray-900 text-sm leading-tight flex-1 min-w-0 pr-2">
                 {task.title}
               </h4>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(task.id);
+                }}
+                className="text-red-500 text-xs"
+              >
+                <Trash2 size={16} />
+              </button>
             </div>
 
             {/* description */}
@@ -57,7 +81,7 @@ export default function SortableTask({ task }: { task: Task }) {
                 {task.assignee && (
                   <div className="flex items-center space-x-1 text-xs text-gray-500">
                     <User className="h-3 w-3" />
-                    <span className="truncate">{task.assignee}</span>
+                    <UserAvatar name={task.assignee} size={20} />
                   </div>
                 )}
 
@@ -70,7 +94,7 @@ export default function SortableTask({ task }: { task: Task }) {
               </div>
               <div
                 className={`w-2 h-2 rounded-full shrink-0 ${getPriorityColor(
-                  task.priority
+                  task.priority,
                 )}`}
               />
             </div>
