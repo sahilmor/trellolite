@@ -2,12 +2,12 @@ import { useUser } from "@clerk/nextjs";
 import { boardServices, boardDataServices } from "@/lib/services/boardService";
 import { columnServices } from "@/lib/services/columnService";
 import { taskServices } from "@/lib/services/taskService";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Board, ColumnWithTasks, Label, Task } from "../supabase/models";
 import { useSupabase } from "../supabase/SupabaseProvider";
-import { activityServices } from "../services/activityServices"
-import { useEffect } from "react";
+import { activityServices } from "../services/activityServices";
 import { labelServices } from "../services/labelServices";
+import { useBoardStore } from "@/store/boardStore";
 
 export function useBoards() {
   const { user } = useUser();
@@ -27,11 +27,10 @@ export function useBoards() {
 
     try {
       setLoading(true);
-      setError(null);
-      const data = await boardServices.getBoards(supabase!, user.id);
+      const data = await boardServices.getBoards(supabase, user.id);
       setBoards(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load boards.");
+      setError(err instanceof Error ? err.message : "Failed to load boards");
     } finally {
       setLoading(false);
     }
@@ -43,28 +42,24 @@ export function useBoards() {
     color?: string;
   }) {
     if (!user || !supabase) throw new Error("User not authenticated");
-    try {
-      const newBoard = await boardDataServices.createBoardWithDefaultColumns(
-        supabase!,
-        {
-          ...boardData,
-          userId: user.id,
-        },
-      );
-      setBoards((prev) => [newBoard, ...prev]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create board.");
-    }
+
+    const newBoard = await boardDataServices.createBoardWithDefaultColumns(
+      supabase,
+      {
+        ...boardData,
+        userId: user.id,
+      },
+    );
+
+    setBoards((prev) => [newBoard, ...prev]);
   }
 
   async function deleteBoard(boardId: string) {
-    if (!user || !supabase) throw new Error("User not authenticated");
-    try {
-      await boardServices.deleteBoard(supabase!, boardId);
-      setBoards((prev) => prev.filter((board) => board.id !== boardId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete board.");
-    }
+    if (!supabase) return;
+
+    await boardServices.deleteBoard(supabase, boardId);
+
+    setBoards((prev) => prev.filter((b) => b.id !== boardId));
   }
 
   return { boards, loading, error, createBoard, deleteBoard };
@@ -73,116 +68,102 @@ export function useBoards() {
 export function useBoard(boardId: string) {
   const { user } = useUser();
   const { supabase } = useSupabase();
+
   const [board, setBoard] = useState<Board | null>(null);
-  const [columns, setColumns] = useState<ColumnWithTasks[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { columns, setColumns, updateTaskInBoard } = useBoardStore();
+  const { setTasks, tasksMap } = useBoardStore.getState();
+
   useEffect(() => {
-    if (boardId && supabase) {
-      loadBoard();
-    }
+    if (boardId && supabase) loadBoard();
   }, [boardId, supabase]);
 
   useEffect(() => {
-
   if (!supabase || !boardId) return;
 
   const channel = supabase
     .channel(`board-${boardId}-realtime`)
-
     .on(
       "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "tasks",
-      },
-      () => {
-        loadBoard();
-      }
+      { event: "*", schema: "public", table: "tasks" },
+      loadBoard
     )
-
     .on(
       "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "columns",
-      },
-      () => {
-        loadBoard();
-      }
+      { event: "*", schema: "public", table: "columns" },
+      loadBoard
     )
-
     .on(
-  "postgres_changes",
-  {
-    event: "*",
-    schema: "public",
-    table: "task_labels",
-  },
-  () => {
-    loadBoard();
-  }
-)
-
-  .on(
-  "postgres_changes",
-  {
-    event: "*",
-    schema: "public",
-    table: "labels",
-  },
-  () => {
-    loadBoard();
-  }
-)
-
+      "postgres_changes",
+      { event: "*", schema: "public", table: "task_labels" },
+      loadBoard
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "labels" },
+      loadBoard
+    )
     .subscribe();
 
   return () => {
     supabase.removeChannel(channel);
   };
-
 }, [supabase, boardId]);
 
   async function loadBoard() {
-    if (!boardId || !supabase) return;
+    if (!supabase) return;
 
     try {
       setLoading(true);
-      setError(null);
+
       const data = await boardDataServices.getBoardWithColumns(
-        supabase!,
+        supabase,
         boardId,
       );
+
       setBoard(data.board);
-      setColumns(data.columnsWithTasks);
+
+      const tasks = await taskServices.getTasksByBoard(supabase, boardId);
+
+      setTasks(tasks);
+
+      const normalizedColumns: ColumnWithTasks[] = data.columnsWithTasks.map(
+        (col) => ({
+          ...col,
+          taskIds: tasks
+            .filter((t) => t.column_id === col.id)
+            .map((t) => t.id),
+        }),
+      );
+
+      setColumns(normalizedColumns);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load boards.");
+      setError(err instanceof Error ? err.message : "Failed to load board");
     } finally {
       setLoading(false);
     }
   }
 
   async function updateBoard(boardId: string, updates: Partial<Board>) {
-    try {
-      const updatedBoard = await boardServices.updateBoard(
-        supabase!,
-        boardId,
-        updates,
-      );
-      setBoard(updatedBoard);
-      return updatedBoard;
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to Update the boards.",
-      );
-    } finally {
-      setLoading(false);
-    }
+  if (!supabase) return;
+
+  try {
+    const updatedBoard = await boardServices.updateBoard(
+      supabase,
+      boardId,
+      updates
+    );
+
+    setBoard(updatedBoard);
+    return updatedBoard;
+  } catch (err) {
+    setError(
+      err instanceof Error ? err.message : "Failed to update board"
+    );
   }
+}
 
   async function createRealTask(
     columnId: string,
@@ -194,34 +175,28 @@ export function useBoard(boardId: string) {
       priority: "low" | "medium" | "high";
     },
   ) {
-    if (!supabase) {
-      throw new Error("Supabase client not initialized");
-    }
+    if (!supabase) return;
 
-    try {
-      const newTask = await taskServices.createTask(supabase, {
-        title: taskData.title,
-        description: taskData.description || null,
-        assignee: taskData.assignee || null,
-        due_date: taskData.dueDate || null,
-        column_id: columnId,
-        priority: taskData.priority || "medium",
-      });
+    const newTask = await taskServices.createTask(supabase, {
+      title: taskData.title,
+      description: taskData.description || null,
+      assignee: taskData.assignee || null,
+      due_date: taskData.dueDate || null,
+      column_id: columnId,
+      priority: taskData.priority,
+    });
 
-      setColumns((prev) =>
-        prev.map((col) =>
-          col.id === columnId
-            ? { ...col, tasks: [...col.tasks, newTask] }
-            : col,
-        ),
-      );
+    setTasks([newTask]);
 
-      return newTask;
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create the task.",
-      );
-    }
+    setColumns((prev) =>
+      prev.map((col) =>
+        col.id === columnId
+          ? { ...col, taskIds: [...col.taskIds, newTask.id] }
+          : col,
+      ),
+    );
+
+    return newTask;
   }
 
   async function moveTask(
@@ -231,289 +206,142 @@ export function useBoard(boardId: string) {
   ) {
     const originalColumns = [...columns];
 
-    setColumns((prevColumns) => {
-      const nextColumns = prevColumns.map((col) => ({
-        ...col,
-        tasks: [...col.tasks],
-      }));
+    setColumns((prev) => {
+      const next = prev.map((c) => ({ ...c, taskIds: [...c.taskIds] }));
 
-      let taskToMove = null;
-
-      for (const col of nextColumns) {
-        const taskIndex = col.tasks.findIndex((t) => t.id === taskId);
-        if (taskIndex !== -1) {
-          [taskToMove] = col.tasks.splice(taskIndex, 1);
-          break;
-        }
+      for (const col of next) {
+        const idx = col.taskIds.indexOf(taskId);
+        if (idx !== -1) col.taskIds.splice(idx, 1);
       }
 
-      if (!taskToMove) return prevColumns;
+      const target = next.find((c) => c.id === newColumnId);
+      if (target) target.taskIds.splice(newOrder, 0, taskId);
 
-      taskToMove = { ...taskToMove, column_id: newColumnId };
-
-      const targetColumn = nextColumns.find((col) => col.id === newColumnId);
-      if (targetColumn) {
-        targetColumn.tasks.splice(newOrder, 0, taskToMove);
-      }
-
-      return nextColumns;
+      return next;
     });
 
     try {
-      if (!supabase) {
-        throw new Error("Supabase client not initialized");
-      }
-
-      await taskServices.moveTask(supabase, taskId, newColumnId, newOrder);
+      await taskServices.moveTask(supabase!, taskId, newColumnId, newOrder);
     } catch (err) {
       setColumns(originalColumns);
-      setError(err instanceof Error ? err.message : "Failed to move the task.");
     }
   }
 
   async function deleteTask(taskId: string) {
-  if (!supabase) {
-    throw new Error("Supabase client not initialized");
-  }
+    if (!supabase) return;
 
-  const originalColumns = [...columns];
+    const originalColumns = [...columns];
 
-  setColumns(prev =>
-    prev.map(col => ({
-      ...col,
-      tasks: col.tasks.filter(task => task.id !== taskId)
-    }))
-  );
-
-  try {
-    await taskServices.deleteTask(supabase, taskId);
-  } catch (err) {
-    setColumns(originalColumns);
-    setError(err instanceof Error ? err.message : "Failed to delete task.");
-  }
-}
-
-async function updateTask(
-  taskId: string,
-  updates: Partial<Omit<Task, "id" | "created_at">>
-) {
-
-  if (!supabase || !user) {
-    throw new Error("Supabase client or user not initialized");
-  }
-
-  const originalColumns = [...columns];
-
-  // optimistic UI update
-  setColumns((prev) =>
-    prev.map((col) => ({
-      ...col,
-      tasks: col.tasks.map((task) =>
-        task.id === taskId ? { ...task, ...updates } : task
-      ),
-    }))
-  );
-
-  try {
-
-    const updatedTask = await taskServices.updateTask(
-      supabase,
-      taskId,
-      updates
+    setColumns((prev) =>
+      prev.map((col) => ({
+        ...col,
+        taskIds: col.taskIds.filter((id) => id !== taskId),
+      })),
     );
-
-    // Activity log
-    for (const [field, value] of Object.entries(updates)) {
-
-  let action = ""
-
-  switch (field) {
-
-    case "priority":
-      action = `changed priority → ${value}`
-      break
-
-    case "assignee":
-      action = `assigned task → ${value || "Unassigned"}`
-      break
-
-    case "due_date":
-      action = `changed due date`
-      break
-
-    case "description":
-      action = `updated description`
-      break
-
-    case "title":
-      action = `renamed task`
-      break
-
-    default:
-      action = `updated task`
-  }
-
-  await activityServices.createActivity(supabase, {
-    task_id: taskId,
-    user_id: user.id,
-    action,
-    metadata: { field, value },
-  })
-}
-
-    return updatedTask;
-
-  } catch (err) {
-
-    // rollback if DB fails
-    setColumns(originalColumns);
-
-    setError(
-      err instanceof Error ? err.message : "Failed to update task."
-    );
-  }
-}
-
-  async function createColumn(title: string) {
-    if (!board || !user) throw new Error("Board not loaded");
 
     try {
-      const newColumn = await columnServices.createColumn(supabase!, {
-        title,
-        board_id: board.id,
-        sort_order: columns.length,
-        user_id: user?.id,
-      });
-
-      setColumns((prev) => [...prev, { ...newColumn, tasks: [] }]);
-      return newColumn;
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create new column.",
-      );
+      await taskServices.deleteTask(supabase, taskId);
+    } catch {
+      setColumns(originalColumns);
     }
+  }
+
+  async function updateTask(
+    taskId: string,
+    updates: Partial<Omit<Task, "id" | "created_at">>,
+  ) {
+    if (!supabase || !user) return;
+
+    updateTaskInBoard(taskId, updates);
+
+    const updatedTask = await taskServices.updateTask(supabase, taskId, updates);
+
+    for (const [field, value] of Object.entries(updates)) {
+      await activityServices.createActivity(supabase, {
+        task_id: taskId,
+        user_id: user.id,
+        action: `updated ${field}`,
+        metadata: { field, value },
+      });
+    }
+
+    return updatedTask;
+  }
+
+  async function createColumn(title: string) {
+    if (!board || !supabase || !user) return;
+
+    const newColumn = await columnServices.createColumn(supabase, {
+      title,
+      board_id: board.id,
+      sort_order: columns.length,
+      user_id: user.id,
+    });
+
+    setColumns((prev) => [...prev, { ...newColumn, taskIds: [] }]);
   }
 
   async function updateColumn(columnId: string, title: string) {
-    try {
-      const updatedColumn = await columnServices.updateColumnTitle(
-        supabase!,
-        columnId,
-        title,
-      );
+    if (!supabase) return;
 
-      setColumns((prev) =>
-        prev.map((col) =>
-          col.id === columnId ? { ...col, ...updatedColumn } : col,
-        ),
-      );
-      return updatedColumn;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update column.");
-    }
+    const updated = await columnServices.updateColumnTitle(
+      supabase,
+      columnId,
+      title,
+    );
+
+    setColumns((prev) =>
+      prev.map((col) => (col.id === columnId ? { ...col, ...updated } : col)),
+    );
   }
 
   async function deleteColumn(columnId: string) {
-    try {
-      await columnServices.deleteColumn(supabase!, columnId);
+    if (!supabase) return;
 
-      setColumns((prev) => prev.filter((col) => col.id !== columnId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete column.");
-    }
+    await columnServices.deleteColumn(supabase, columnId);
+
+    setColumns((prev) => prev.filter((c) => c.id !== columnId));
   }
 
-async function addLabel(taskId: string, label: Label) {
-  if (!supabase) return;
+  async function addLabel(taskId: string, label: Label) {
+    if (!supabase) return;
 
-  // DB update
-  await labelServices.addLabelToTask(supabase, taskId, label.id);
+    await labelServices.addLabelToTask(supabase, taskId, label.id);
 
-  // UI update
-  setColumns((prev) =>
-    prev.map((col) => ({
-      ...col,
-      tasks: col.tasks.map((task) => {
-        if (task.id !== taskId) return task;
+    updateTaskInBoard(taskId, {
+      task_labels: [
+        ...(tasksMap[taskId]?.task_labels || []),
+        { label_id: label.id, labels: label },
+      ],
+    });
+  }
 
-        const exists = task.task_labels?.some(
-          (l) => l.label_id === label.id
-        );
+  async function removeLabel(taskId: string, labelId: string) {
+    if (!supabase) return;
 
-        if (exists) return task;
+    await labelServices.removeLabelFromTask(supabase, taskId, labelId);
 
-        return {
-          ...task,
-          task_labels: [
-            ...(task.task_labels || []),
-            {
-              label_id: label.id,
-              labels: label,
-            },
-          ],
-        };
-      }),
-    }))
-  );
-}
+    const task = tasksMap[taskId];
 
-async function removeLabel(taskId: string, labelId: string) {
-  if (!supabase) return;
-
-  await labelServices.removeLabelFromTask(supabase, taskId, labelId);
-
-  setColumns((prev) =>
-    prev.map((col) => ({
-      ...col,
-      tasks: col.tasks.map((task) => {
-        if (task.id !== taskId) return task;
-
-        return {
-          ...task,
-          task_labels:
-            task.task_labels?.filter((l) => l.label_id !== labelId) || [],
-        };
-      }),
-    }))
-  );
-}
-
-function updateLabelInTasks(labelId: string, updates: Partial<Label>) {
-  setColumns((prev) =>
-    prev.map((col) => ({
-      ...col,
-      tasks: col.tasks.map((task) => ({
-        ...task,
-        task_labels:
-          task.task_labels?.map((tl) =>
-            tl.label_id === labelId
-              ? {
-                  ...tl,
-                  labels: { ...tl.labels, ...updates },
-                }
-              : tl
-          ) || [],
-      })),
-    }))
-  );
-}
+    updateTaskInBoard(taskId, {
+      task_labels: task?.task_labels?.filter((l) => l.label_id !== labelId) || [],
+    });
+  }
 
   return {
     board,
     columns,
     loading,
     error,
-    updateBoard,
     createRealTask,
-    setColumns,
     moveTask,
     deleteTask,
+    updateBoard,
     updateTask,
     createColumn,
     updateColumn,
     deleteColumn,
     addLabel,
     removeLabel,
-    updateLabelInTasks,
   };
 }

@@ -66,7 +66,7 @@ export default function DropableColumn({
                 {column.title}
               </h3>
               <Badge variant={"secondary"} className="text-xs shrink-0">
-                {column.tasks.length}
+                {column.taskIds.length}
               </Badge>
             </div>
 

@@ -42,28 +42,41 @@ import {
 } from "@dnd-kit/sortable";
 import DropableColumn from "@/components/column/DropableColumn";
 import SortableTask from "@/components/tasks/SortableTask";
-import { ColumnWithTasks, Task } from "@/lib/supabase/models";
+import { Task } from "@/lib/supabase/models";
 import TaskOverlay from "@/components/tasks/TaskOverlay";
 import TaskModal from "@/components/tasks/TaskModal"
+import { useBoardStore } from "@/store/boardStore";
+
 
 export default function BoardPage() {
   const { id } = useParams<{ id: string }>();
+const {
+  board,
+  updateBoard,
+  createRealTask,
+  moveTask,
+  deleteTask,
+  updateTask,
+  createColumn,
+  updateColumn,
+  deleteColumn,
+  addLabel,
+  removeLabel,
+} = useBoard(id);
+
   const {
-    board,
-    updateBoard,
-    columns,
-    createRealTask,
-    setColumns,
-    moveTask,
-    deleteTask,
-    updateTask,
-    createColumn,
-    updateColumn,
-    deleteColumn,
-    addLabel,
-    removeLabel,
-    updateLabelInTasks,
-  } = useBoard(id);
+  selectedTask,
+  setColumns,
+  isTaskModalOpen,
+  openTaskModal,
+  closeTaskModal,
+  setSelectedTask,
+  columns,
+  tasksMap,
+  updateLabelInTasks,
+} = useBoardStore()
+
+
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -77,15 +90,13 @@ export default function BoardPage() {
   const [isCreatingColumn, setIsCreatingColumn] = useState(false);
   
   const [isEditingColumn, setIsEditingColumn] = useState(false);
-  const [editingColumn, setEditingColumn] = useState<ColumnWithTasks | null>(null);
   const [editingColumnTitle, setEditingColumnTitle] = useState("");
 
   const [isDeleteColumnDialogOpen, setIsDeleteColumnDialogOpen] = useState(false);
-  const [columnToDelete, setColumnToDelete] = useState<ColumnWithTasks | null>(null);
   const [newColumnTitle, setNewColumnTitle] = useState("");
 
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [editingColumn, setEditingColumn] = useState<typeof columns[number] | null>(null);
+const [columnToDelete, setColumnToDelete] = useState<typeof columns[number] | null>(null);
 
   const [filters, setFilters] = useState({
     priority: [] as string[],
@@ -170,106 +181,84 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
   function handleDragStart(event: DragStartEvent) {
     const taskId = event.active.id as string;
-    const sourceCol = columns.find(col => col.tasks.some(t => t.id === taskId));
+    const sourceCol = columns.find(col => col.taskIds.includes(taskId));
 
     if (sourceCol) {
-        const index = sourceCol.tasks.findIndex(t => t.id === taskId);
+        const index = sourceCol.taskIds.indexOf(taskId);
+setActiveTask(tasksMap[taskId]);
         setDragStartPos({ colId: sourceCol.id, index });
-        setActiveTask(sourceCol.tasks[index]);
     }
   }
 
   function handleDragOver(event: DragOverEvent) {
-    const { active, over } = event;
-    if (!over) return;
+  const { active, over } = event;
+  if (!over) return;
 
-    const activeId = active.id as string;
-    const overId = over.id as string;
+  const activeId = active.id as string;
+  const overId = over.id as string;
 
-    const sourceColumn = columns.find((col) =>
-      col.tasks.some((task) => task.id === activeId)
-    );
+  const sourceColumn = columns.find((col) =>
+    col.taskIds.includes(activeId)
+  );
 
-    const targetColumn = columns.find(
-      (col) => col.id === overId || col.tasks.some((task) => task.id === overId)
-    );
+  const targetColumn = columns.find(
+    (col) => col.id === overId || col.taskIds.includes(overId)
+  );
 
-    if (!sourceColumn || !targetColumn) return;
+  if (!sourceColumn || !targetColumn) return;
 
-    // Moving between DIFFERENT columns
-    if (sourceColumn.id !== targetColumn.id) {
-      setColumns((prev) => {
-        const activeItems = sourceColumn.tasks;
-        const overItems = targetColumn.tasks;
-        const activeIndex = activeItems.findIndex((t) => t.id === activeId);
-        
-        // Calculate new index
-        let newIndex;
-        if (overItems.some((t) => t.id === overId)) {
-          const overIndex = overItems.findIndex((t) => t.id === overId);
-          const isBelowOverItem =
-            over &&
-            active.rect.current.translated &&
-            active.rect.current.translated.top >
-              over.rect.top + over.rect.height;
-
-          const modifier = isBelowOverItem ? 1 : 0;
-          newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length;
-        } else {
-          newIndex = overItems.length;
+  if (sourceColumn.id !== targetColumn.id) {
+    setColumns((prev) =>
+      prev.map((col) => {
+        // remove from source
+        if (col.id === sourceColumn.id) {
+          return {
+            ...col,
+            taskIds: col.taskIds.filter((id) => id !== activeId),
+          };
         }
 
-        return prev.map((col) => {
-          if (col.id === sourceColumn.id) {
-            return {
-              ...col,
-              tasks: col.tasks.filter((t) => t.id !== activeId),
-            };
+        // add to target
+        if (col.id === targetColumn.id) {
+          const newIds = [...col.taskIds];
+
+          if (!newIds.includes(activeId)) {
+            newIds.push(activeId);
           }
-          else if (col.id === targetColumn.id) {
-            const newTasks = [...col.tasks];
-            const taskToMove = activeTask || sourceColumn.tasks[activeIndex];
 
-            if (!newTasks.find((t) => t.id === activeId) && taskToMove) {
-              newTasks.splice(newIndex, 0, taskToMove);
-            }
-            return {
-              ...col,
-              tasks: newTasks,
-            };
-          }
-          return col;
-        });
-      });
-    }
-    // Moving inside SAME column
-    else {
-      const activeIndex = sourceColumn.tasks.findIndex(
-        (t) => t.id === activeId
-      );
-      const overIndex = sourceColumn.tasks.findIndex((t) => t.id === overId);
+          return {
+            ...col,
+            taskIds: newIds,
+          };
+        }
 
-      // --- CRITICAL FIX START ---
-      // If overIndex is -1, it means we are hovering over the column container, not a task.
-      // We should ignore this to prevent the "Maximum update depth exceeded" crash.
-      if (overIndex === -1) return;
-      // --- CRITICAL FIX END ---
+        return col;
+      })
+    );
+  } else {
+  const activeIndex = sourceColumn.taskIds.indexOf(activeId);
+  const overIndex = sourceColumn.taskIds.indexOf(overId);
 
-      if (activeIndex !== overIndex) {
-        setColumns((prev) => {
-          return prev.map((col) => {
-            if (col.id === sourceColumn.id) {
-              const newTasks = [...col.tasks];
-              const [movedTask] = newTasks.splice(activeIndex, 1);
-              newTasks.splice(overIndex, 0, movedTask);
-              return { ...col, tasks: newTasks };
-            }
-            return col;
-          });
-        });
-      }
-    }
+  if (overIndex === -1) return;
+
+  if (activeIndex !== overIndex) {
+    setColumns((prev) =>
+      prev.map((col) => {
+        if (col.id !== sourceColumn.id) return col;
+
+        const newIds = [...col.taskIds];
+        const [moved] = newIds.splice(activeIndex, 1);
+        newIds.splice(overIndex, 0, moved);
+
+        return {
+          ...col,
+          taskIds: newIds,
+        };
+      })
+    );
   }
+}
+}
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -282,10 +271,10 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
         return;
     }
 
-    const finalColumn = columns.find((col) => col.tasks.some((t) => t.id === taskId));
+    const finalColumn = columns.find((col) => col.taskIds.includes(taskId));
 
     if (finalColumn) {
-        const finalIndex = finalColumn.tasks.findIndex((t) => t.id === taskId);
+        const finalIndex = finalColumn.taskIds.indexOf(taskId);
         
         if (finalColumn.id !== dragStartPos.colId || finalIndex !== dragStartPos.index) {
             await moveTask(taskId, finalColumn.id, finalIndex);
@@ -318,16 +307,16 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     setEditingColumn(null);
   }
 
-  function handleEditColumn(column: ColumnWithTasks) {
-    setIsEditingColumn(true);
-    setEditingColumn(column);
-    setEditingColumnTitle(column.title);
-  }
-  
-  function handleDeleteColumn(column: ColumnWithTasks) {
-    setColumnToDelete(column);
-    setIsDeleteColumnDialogOpen(true);
-  }
+function handleEditColumn(column: typeof columns[number]) {
+  setIsEditingColumn(true);
+  setEditingColumn(column);
+  setEditingColumnTitle(column.title);
+}
+
+function handleDeleteColumn(column: typeof columns[number]) {
+  setColumnToDelete(column);
+  setIsDeleteColumnDialogOpen(true);
+}
 
   async function confirmDeleteColumn() {
     if (columnToDelete && deleteColumn) {
@@ -337,26 +326,28 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     setColumnToDelete(null);
   }
 
-  const filteredColumns = columns.map((column) => ({
-    ...column,
-    tasks: column.tasks.filter((task) => {
-      
-      if(filters.priority.length > 0 && !filters.priority.includes(task.priority)) {
-        return false;
-      }
+  const getFilteredTaskIds = (column: typeof columns[number]) => {
+  return column.taskIds.filter((taskId) => {
+    const task = tasksMap[taskId];
+    if (!task) return false;
 
-      if(filters.dueDate && task.due_date) {
-        const taskDate = new Date(task.due_date).toDateString()
-        const filteredDate = new Date(filters.dueDate).toDateString()
+    if (
+      filters.priority.length > 0 &&
+      !filters.priority.includes(task.priority)
+    ) {
+      return false;
+    }
 
-        if(taskDate !== filteredDate) {
-          return false;
-        }
-      }
-      
-      return true;
-    })
-  }))
+    if (filters.dueDate && task.due_date) {
+      const taskDate = new Date(task.due_date).toDateString();
+      const filterDate = new Date(filters.dueDate).toDateString();
+
+      if (taskDate !== filterDate) return false;
+    }
+
+    return true;
+  });
+};
 
   return (
     <>
@@ -508,7 +499,7 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
             <div className="flex flex-wrap items-center gap-4 sm:gap-6">
               <div className="text-xs text-gray-600">
                 <span className="font-medium">Total Tasks:</span>
-                {columns.reduce((sum, col) => sum + col.tasks.length, 0)}
+                {columns.reduce((sum, col) => sum + col.taskIds.length, 0)}
               </div>
             </div>
 
@@ -598,34 +589,39 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
           lg:[&::-webkit-scrollbar-track]:bg-gray-100 
           lg:[&::-webkit-scrollbar-thumb]:bg-gray-300 lg:[&::-webkit-scrollbar-thumb]:rounded-full space-y-4 lg:space-y-0"
             >
-              {filteredColumns.map((column, key) => (
-                <DropableColumn
-                  key={column.id}
-                  column={column}
-                  onCreateTask={handleCreateTask}
-                  onEditColumn={handleEditColumn}
-                  onDeleteColumn={handleDeleteColumn}
-                >
-                  <SortableContext
-                    items={column.tasks.map((task) => task.id)}
-                    strategy={verticalListSortingStrategy}
+              {columns.map((column) => {
+                const filteredTaskIds = getFilteredTaskIds(column);
+                return (
+                  <DropableColumn
+                    key={column.id}
+                    column={column}
+                    onCreateTask={handleCreateTask}
+                    onEditColumn={handleEditColumn}
+                    onDeleteColumn={handleDeleteColumn}
                   >
-                    <div className="space-y-3">
-                      {column.tasks.map((task, key) => (
-                        <SortableTask
-                          task={task}
-                          key={task.id}
-                          onDelete={deleteTask}
-                          onClick={() => {
-                            setSelectedTask(task);
-                            setIsTaskModalOpen(true);
-                          }}
-                        ></SortableTask>
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DropableColumn>
-              ))}
+                    <SortableContext
+                      items={filteredTaskIds}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-3">
+                        {filteredTaskIds.map((taskId) => {
+                          const task = tasksMap[taskId];
+                          if (!task) return null;
+
+                          return (
+                            <SortableTask
+                              key={task.id}
+                              task={task}
+                              onDelete={deleteTask}
+                              onClick={() => openTaskModal(task)}
+                            />
+                          );
+                        })}
+                      </div>
+                    </SortableContext>
+                  </DropableColumn>
+                );
+              })}
 
               <div>
                 <Button
@@ -748,16 +744,15 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
         open={isTaskModalOpen}
         onUpdateTask={async (taskId, updates) => {
           await updateTask(taskId, updates);
+
+          // update global task state
           setSelectedTask((prev) => (prev ? { ...prev, ...updates } : null));
         }}
-        onClose={() => {
-          setIsTaskModalOpen(false);
-          setSelectedTask(null);
-        }}
+        onClose={closeTaskModal}
         boardId={board?.id || ""}
         onAddLabel={addLabel}
-  onRemoveLabel={removeLabel}
-  onUpdateLabelInTasks={updateLabelInTasks}
+        onRemoveLabel={removeLabel}
+        onUpdateLabelInTasks={updateLabelInTasks}
       />
     </>
   );

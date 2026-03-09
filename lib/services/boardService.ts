@@ -2,6 +2,7 @@ import { Board } from "@/lib/supabase/models";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { columnServices } from "./columnService";
 import { taskServices } from "./taskService";
+import { useBoardStore } from "@/store/boardStore";
 
 export const boardServices = {
   async getBoard(supabase: SupabaseClient, boardId: string): Promise<Board> {
@@ -90,10 +91,16 @@ export const boardDataServices = {
 
     const tasks = await taskServices.getTasksByBoard(supabase, boardId);
 
+    const { setTasks } = useBoardStore.getState()
+
+    setTasks(tasks)
+
     const columnsWithTasks = columns.map((column) => ({
-        ...column,
-        tasks: tasks.filter((task) => task.column_id === column.id)
-    }))
+  ...column,
+  taskIds: tasks
+    .filter((task) => task.column_id === column.id)
+    .map((task) => task.id)
+}))
 
     return {
       board,

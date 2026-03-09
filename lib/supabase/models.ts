@@ -19,7 +19,7 @@ export interface Column {
 }
 
 export type ColumnWithTasks = Column & {
-    tasks: Task[];
+  taskIds: string[]
 }
 
 export interface Task {
