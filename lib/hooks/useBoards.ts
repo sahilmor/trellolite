@@ -3,10 +3,11 @@ import { boardServices, boardDataServices } from "@/lib/services/boardService";
 import { columnServices } from "@/lib/services/columnService";
 import { taskServices } from "@/lib/services/taskService";
 import { useState } from "react";
-import { Board, ColumnWithTasks, Task } from "../supabase/models";
+import { Board, ColumnWithTasks, Label, Task } from "../supabase/models";
 import { useSupabase } from "../supabase/SupabaseProvider";
 import { activityServices } from "../services/activityServices"
 import { useEffect } from "react";
+import { labelServices } from "../services/labelServices";
 
 export function useBoards() {
   const { user } = useUser();
@@ -398,6 +399,59 @@ async function updateTask(
     }
   }
 
+async function addLabel(taskId: string, label: Label) {
+  if (!supabase) return;
+
+  // DB update
+  await labelServices.addLabelToTask(supabase, taskId, label.id);
+
+  // UI update
+  setColumns((prev) =>
+    prev.map((col) => ({
+      ...col,
+      tasks: col.tasks.map((task) => {
+        if (task.id !== taskId) return task;
+
+        const exists = task.task_labels?.some(
+          (l) => l.label_id === label.id
+        );
+
+        if (exists) return task;
+
+        return {
+          ...task,
+          task_labels: [
+            ...(task.task_labels || []),
+            {
+              label_id: label.id,
+              labels: label,
+            },
+          ],
+        };
+      }),
+    }))
+  );
+}
+
+async function removeLabel(taskId: string, labelId: string) {
+  if (!supabase) return;
+
+  setColumns((prev) =>
+    prev.map((col) => ({
+      ...col,
+      tasks: col.tasks.map((task) => {
+        if (task.id !== taskId) return task;
+
+        return {
+          ...task,
+          task_labels:
+            task.task_labels?.filter((l) => l.label_id !== labelId) || [],
+        };
+      }),
+    }))
+  );
+}
+
   return {
     board,
     columns,
@@ -412,5 +466,7 @@ async function updateTask(
     createColumn,
     updateColumn,
     deleteColumn,
+    addLabel,
+    removeLabel,
   };
 }

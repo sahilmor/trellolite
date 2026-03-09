@@ -4,15 +4,22 @@ import { SupabaseClient } from "@supabase/supabase-js";
 export const taskServices = {
   async getTasksByBoard(
     supabase: SupabaseClient,
-    boardId: string
+    boardId: string,
   ): Promise<Task[]> {
     const { data, error } = await supabase
       .from("tasks")
       .select(
         `
-                *,
-                columns!inner(board_id)
-                `
+  *,
+  columns!inner(board_id),
+  task_labels (
+    labels (
+      id,
+      name,
+      color
+    )
+  )
+`,
       )
       .eq("columns.board_id", boardId)
       .order("sort_order", { ascending: true });
@@ -24,7 +31,9 @@ export const taskServices = {
 
   async createTask(
     supabase: SupabaseClient,
-    task: Omit<Task, "id" | "created_at" | "updated_at" | "sort_order"> & { sort_order?: number }
+    task: Omit<Task, "id" | "created_at" | "updated_at" | "sort_order"> & {
+      sort_order?: number;
+    },
   ): Promise<Task> {
     let sortOrder = task.sort_order;
 
@@ -59,64 +68,60 @@ export const taskServices = {
     supabase: SupabaseClient,
     taskId: string,
     newColumnId: string,
-    newOrder: number
+    newOrder: number,
   ): Promise<Task> {
     const { data, error } = await supabase
       .from("tasks")
-      .update({ column_id: newColumnId, sort_order: newOrder, updated_at: new Date().toISOString() })
+      .update({
+        column_id: newColumnId,
+        sort_order: newOrder,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", taskId)
       .select();
 
     if (error) {
-        throw error;
+      throw error;
     }
 
-
     if (!data || data.length === 0) {
-       throw new Error("Task not found or access denied");
+      throw new Error("Task not found or access denied");
     }
 
     return data[0];
   },
 
-  async deleteTask(
-  supabase: SupabaseClient,
-  taskId: string
-): Promise<void> {
-  const { error } = await supabase
-    .from("tasks")
-    .delete()
-    .eq("id", taskId);
+  async deleteTask(supabase: SupabaseClient, taskId: string): Promise<void> {
+    const { error } = await supabase.from("tasks").delete().eq("id", taskId);
 
-  if (error) {
-    throw new Error(`Failed to delete task: ${error.message}`);
-  }
-},
+    if (error) {
+      throw new Error(`Failed to delete task: ${error.message}`);
+    }
+  },
 
-async updateTask(
-  supabase: SupabaseClient,
-  taskId: string,
-  updates: Partial<Omit<Task, "id" | "created_at">>
-): Promise<Task> {
+  async updateTask(
+    supabase: SupabaseClient,
+    taskId: string,
+    updates: Partial<Omit<Task, "id" | "created_at">>,
+  ): Promise<Task> {
+    const { data, error } = await supabase
+      .from("tasks")
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", taskId)
+      .select()
+      .single();
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", taskId)
-    .select()
-    .single();
+    if (error) {
+      throw new Error(`Failed to update task: ${error.message}`);
+    }
 
-  if (error) {
-    throw new Error(`Failed to update task: ${error.message}`);
-  }
+    if (!data) {
+      throw new Error("Task not found or access denied");
+    }
 
-  if (!data) {
-    throw new Error("Task not found or access denied");
-  }
-
-  return data;
-},
+    return data;
+  },
 };

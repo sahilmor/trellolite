@@ -60,6 +60,8 @@ export default function BoardPage() {
     createColumn,
     updateColumn,
     deleteColumn,
+    addLabel,
+    removeLabel,
   } = useBoard(id);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -597,7 +599,7 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
             >
               {filteredColumns.map((column, key) => (
                 <DropableColumn
-                  key={key}
+                  key={column.id}
                   column={column}
                   onCreateTask={handleCreateTask}
                   onEditColumn={handleEditColumn}
@@ -611,7 +613,7 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
                       {column.tasks.map((task, key) => (
                         <SortableTask
                           task={task}
-                          key={key}
+                          key={task.id}
                           onDelete={deleteTask}
                           onClick={() => {
                             setSelectedTask(task);
@@ -741,17 +743,20 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
       </Dialog>
 
       <TaskModal
-  task={selectedTask}
-  open={isTaskModalOpen}
-  onUpdateTask={async (taskId, updates) => {
-    await updateTask(taskId, updates);
-    setSelectedTask((prev) => prev ? { ...prev, ...updates } : null);
-  }}
-  onClose={() => {
-    setIsTaskModalOpen(false)
-    setSelectedTask(null)
-  }}
-/>
+        task={selectedTask}
+        open={isTaskModalOpen}
+        onUpdateTask={async (taskId, updates) => {
+          await updateTask(taskId, updates);
+          setSelectedTask((prev) => (prev ? { ...prev, ...updates } : null));
+        }}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setSelectedTask(null);
+        }}
+        boardId={board?.id || ""}
+        onAddLabel={addLabel}
+  onRemoveLabel={removeLabel}
+      />
     </>
   );
 }

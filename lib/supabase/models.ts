@@ -23,16 +23,18 @@ export type ColumnWithTasks = Column & {
 }
 
 export interface Task {
-    id: string;
-    column_id: string;
-    title: string;
-    description: string | null;
-    assignee: string | null;
-    due_date: string | null;
-    priority: "low" | "medium" | "high";
-    sort_order: number;
-    created_at: string;
-    updated_at: string;
+  id: string
+  column_id: string
+  title: string
+  description: string | null
+  assignee: string | null
+  due_date: string | null
+  priority: "low" | "medium" | "high"
+  sort_order: number
+  created_at: string
+  updated_at: string
+
+  task_labels?: TaskLabel[]
 }
 
 export interface Comment {
@@ -59,4 +61,20 @@ export interface UserProfile {
   name: string
   email?: string
   image_url?: string
+}
+
+export interface Label {
+  id: string
+  name: string
+  color: string
+  board_id: string
+  created_at: string
+  usage?: number
+}
+
+export interface TaskLabel {
+  id?: string
+  task_id?: string
+  label_id: string
+  labels: Label
 }

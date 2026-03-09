@@ -54,20 +54,33 @@ export default function SortableTask({
         <CardContent className="p-3 sm:p-4">
           <div className="space-y-2 sm:space-y-3">
             {/* task header */}
-            <div className="flex items-start justify-between">
-              <h4 className="font-medium text-gray-900 text-sm leading-tight flex-1 min-w-0 pr-2">
+            <div className="space-y-1">
+              {/* Labels */}
+              {/* Labels */}
+              {task.task_labels?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {task.task_labels?.map((item, index) => {
+                    const label = item?.labels;
+
+                    if (!label) return null;
+
+                    return (
+                      <span
+                        key={`${task.id}-${label.id}-${index}`}
+                        style={{ backgroundColor: label.color }}
+                        className="text-white text-[10px] px-2 py-[2px] rounded font-medium"
+                      >
+                        {label.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {/* Title */}
+              <h4 className="font-medium text-gray-900 text-sm leading-tight">
                 {task.title}
               </h4>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(task.id);
-                }}
-                className="text-red-500 text-xs"
-              >
-                <Trash2 size={16} />
-              </button>
             </div>
 
             {/* description */}
