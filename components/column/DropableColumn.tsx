@@ -28,6 +28,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useDroppable } from "@dnd-kit/core";
+import React from "react";
 
 interface DropableColumnProps {
   column: ColumnWithTasks;
@@ -37,7 +38,7 @@ interface DropableColumnProps {
   onDeleteColumn: (column: ColumnWithTasks) => void;
 }
 
-export default function DropableColumn({
+function DropableColumn({
   column,
   children,
   onCreateTask,
@@ -175,3 +176,5 @@ export default function DropableColumn({
     </div>
   );
 }
+
+export default React.memo(DropableColumn)

@@ -5,8 +5,9 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Trash2 } from "lucide-react";
 import UserAvatar from "../ui/user-avatar";
+import React from "react";
 
-export default function SortableTask({
+function SortableTask({
   task,
   onDelete,
   onClick,
@@ -117,3 +118,5 @@ export default function SortableTask({
     </div>
   );
 }
+
+export default React.memo(SortableTask)

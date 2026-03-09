@@ -3,7 +3,13 @@ import { boardServices, boardDataServices } from "@/lib/services/boardService";
 import { columnServices } from "@/lib/services/columnService";
 import { taskServices } from "@/lib/services/taskService";
 import { useState, useEffect } from "react";
-import { Board, ColumnWithTasks, Label, Task } from "../supabase/models";
+import {
+  Board,
+  ColumnWithTasks,
+  Label,
+  Task,
+  TaskActivity,
+} from "../supabase/models";
 import { useSupabase } from "../supabase/SupabaseProvider";
 import { activityServices } from "../services/activityServices";
 import { labelServices } from "../services/labelServices";
@@ -73,7 +79,8 @@ export function useBoard(boardId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { columns, setColumns, updateTaskInBoard } = useBoardStore();
+  const { columns, setColumns, updateTaskInBoard, setCurrentBoardId } =
+    useBoardStore();
   const { setTasks, tasksMap } = useBoardStore.getState();
 
   useEffect(() => {
@@ -81,36 +88,36 @@ export function useBoard(boardId: string) {
   }, [boardId, supabase]);
 
   useEffect(() => {
-  if (!supabase || !boardId) return;
+    if (!supabase || !boardId) return;
 
-  const channel = supabase
-    .channel(`board-${boardId}-realtime`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "tasks" },
-      loadBoard
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "columns" },
-      loadBoard
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "task_labels" },
-      loadBoard
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "labels" },
-      loadBoard
-    )
-    .subscribe();
+    const channel = supabase
+      .channel(`board-${boardId}-realtime`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks" },
+        loadBoard,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "columns" },
+        loadBoard,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "task_labels" },
+        loadBoard,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "labels" },
+        loadBoard,
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, [supabase, boardId]);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, boardId]);
 
   async function loadBoard() {
     if (!supabase) return;
@@ -124,6 +131,8 @@ export function useBoard(boardId: string) {
       );
 
       setBoard(data.board);
+      setColumns(data.columnsWithTasks);
+      setCurrentBoardId(boardId);
 
       const tasks = await taskServices.getTasksByBoard(supabase, boardId);
 
@@ -132,9 +141,7 @@ export function useBoard(boardId: string) {
       const normalizedColumns: ColumnWithTasks[] = data.columnsWithTasks.map(
         (col) => ({
           ...col,
-          taskIds: tasks
-            .filter((t) => t.column_id === col.id)
-            .map((t) => t.id),
+          taskIds: tasks.filter((t) => t.column_id === col.id).map((t) => t.id),
         }),
       );
 
@@ -147,23 +154,21 @@ export function useBoard(boardId: string) {
   }
 
   async function updateBoard(boardId: string, updates: Partial<Board>) {
-  if (!supabase) return;
+    if (!supabase) return;
 
-  try {
-    const updatedBoard = await boardServices.updateBoard(
-      supabase,
-      boardId,
-      updates
-    );
+    try {
+      const updatedBoard = await boardServices.updateBoard(
+        supabase,
+        boardId,
+        updates,
+      );
 
-    setBoard(updatedBoard);
-    return updatedBoard;
-  } catch (err) {
-    setError(
-      err instanceof Error ? err.message : "Failed to update board"
-    );
+      setBoard(updatedBoard);
+      return updatedBoard;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update board");
+    }
   }
-}
 
   async function createRealTask(
     columnId: string,
@@ -250,22 +255,70 @@ export function useBoard(boardId: string) {
     taskId: string,
     updates: Partial<Omit<Task, "id" | "created_at">>,
   ) {
-    if (!supabase || !user) return;
-
-    updateTaskInBoard(taskId, updates);
-
-    const updatedTask = await taskServices.updateTask(supabase, taskId, updates);
-
-    for (const [field, value] of Object.entries(updates)) {
-      await activityServices.createActivity(supabase, {
-        task_id: taskId,
-        user_id: user.id,
-        action: `updated ${field}`,
-        metadata: { field, value },
-      });
+    if (!supabase || !user) {
+      throw new Error("Supabase client or user not initialized");
     }
 
-    return updatedTask;
+    const originalColumns = [...columns];
+
+    const task = useBoardStore.getState().tasksMap[taskId];
+
+    try {
+      const updatedTask = await taskServices.updateTask(
+        supabase,
+        taskId,
+        updates,
+      );
+
+      // update UI
+      updateTaskInBoard(taskId, updates);
+
+      // activity logs
+      for (const [field, value] of Object.entries(updates)) {
+        const previousValue = (task as any)?.[field];
+
+        if (previousValue === value) continue;
+
+        let action = `updated ${field}`;
+
+        const optimisticActivity: TaskActivity = {
+          id: crypto.randomUUID(),
+          task_id: taskId,
+          user_id: user.id,
+          action,
+          metadata: {
+            field,
+            previous: previousValue,
+            next: value,
+          },
+          created_at: new Date().toISOString(),
+          users: {
+            id: user.id, // add this
+            name: user.fullName || "Unknown",
+            image_url: user.imageUrl,
+          },
+        };
+
+        useBoardStore.getState().addActivity(optimisticActivity);
+
+        await activityServices.createActivity(supabase, {
+          task_id: taskId,
+          user_id: user.id,
+          action,
+          metadata: {
+            field,
+            previous: previousValue,
+            next: value,
+          },
+        });
+      }
+
+      return updatedTask;
+    } catch (err) {
+      setColumns(originalColumns);
+
+      setError(err instanceof Error ? err.message : "Failed to update task.");
+    }
   }
 
   async function createColumn(title: string) {
@@ -304,9 +357,7 @@ export function useBoard(boardId: string) {
   }
 
   async function addLabel(taskId: string, label: Label) {
-    if (!supabase) return;
-
-    await labelServices.addLabelToTask(supabase, taskId, label.id);
+    if (!supabase || !user) return;
 
     updateTaskInBoard(taskId, {
       task_labels: [
@@ -314,17 +365,37 @@ export function useBoard(boardId: string) {
         { label_id: label.id, labels: label },
       ],
     });
+
+    await labelServices.addLabelToTask(supabase, taskId, label.id);
+
+    await activityServices.createActivity(supabase, {
+      task_id: taskId,
+      user_id: user.id,
+      action: `added label → ${label.name}`,
+      metadata: { labelId: label.id, labelName: label.name },
+    });
   }
 
   async function removeLabel(taskId: string, labelId: string) {
-    if (!supabase) return;
-
-    await labelServices.removeLabelFromTask(supabase, taskId, labelId);
+    if (!supabase || !user) return;
 
     const task = tasksMap[taskId];
+    const label = task?.task_labels?.find(
+      (l) => l.label_id === labelId,
+    )?.labels;
 
     updateTaskInBoard(taskId, {
-      task_labels: task?.task_labels?.filter((l) => l.label_id !== labelId) || [],
+      task_labels:
+        task?.task_labels?.filter((l) => l.label_id !== labelId) || [],
+    });
+
+    await labelServices.removeLabelFromTask(supabase, taskId, labelId);
+    
+    await activityServices.createActivity(supabase, {
+      task_id: taskId,
+      user_id: user.id,
+      action: `removed label → ${label?.name || ""}`,
+      metadata: { labelId: labelId, labelName: label?.name },
     });
   }
 

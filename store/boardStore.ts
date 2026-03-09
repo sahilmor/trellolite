@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import { Task, ColumnWithTasks, Label } from "@/lib/supabase/models"
+import { Task, ColumnWithTasks, Label, TaskActivity } from "@/lib/supabase/models"
 
 type BoardStore = {
   selectedTask: Task | null
@@ -7,6 +7,7 @@ type BoardStore = {
 
   columns: ColumnWithTasks[]
   tasksMap: Record<string, Task>
+  currentBoardId: string | null
 
   setColumns: (
     columns:
@@ -24,6 +25,11 @@ type BoardStore = {
 
   openTaskModal: (task: Task) => void
   closeTaskModal: () => void
+  setCurrentBoardId: (id: string) => void
+
+  activity: TaskActivity[]
+setActivity: (activity: TaskActivity[]) => void
+addActivity: (activity: TaskActivity) => void
 }
 
 export const useBoardStore = create<BoardStore>((set) => ({
@@ -94,4 +100,20 @@ export const useBoardStore = create<BoardStore>((set) => ({
       selectedTask: null,
       isTaskModalOpen: false,
     }),
+
+  currentBoardId: null,
+
+setCurrentBoardId: (id) =>
+  set({
+    currentBoardId: id,
+  }),
+
+  activity: [],
+
+setActivity: (activity) => set({ activity }),
+
+addActivity: (activity) =>
+  set((state) => ({
+    activity: [activity, ...state.activity],
+  })),
 }))

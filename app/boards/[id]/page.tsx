@@ -64,17 +64,10 @@ const {
   removeLabel,
 } = useBoard(id);
 
-  const {
-  selectedTask,
-  setColumns,
-  isTaskModalOpen,
-  openTaskModal,
-  closeTaskModal,
-  setSelectedTask,
-  columns,
-  tasksMap,
-  updateLabelInTasks,
-} = useBoardStore()
+const columns = useBoardStore((s) => s.columns)
+const tasksMap = useBoardStore((s) => s.tasksMap)
+const setColumns = useBoardStore((s) => s.setColumns)
+const openTaskModal = useBoardStore((s) => s.openTaskModal)
 
 
 
@@ -739,21 +732,7 @@ function handleDeleteColumn(column: typeof columns[number]) {
         </DialogContent>
       </Dialog>
 
-      <TaskModal
-        task={selectedTask}
-        open={isTaskModalOpen}
-        onUpdateTask={async (taskId, updates) => {
-          await updateTask(taskId, updates);
-
-          // update global task state
-          setSelectedTask((prev) => (prev ? { ...prev, ...updates } : null));
-        }}
-        onClose={closeTaskModal}
-        boardId={board?.id || ""}
-        onAddLabel={addLabel}
-        onRemoveLabel={removeLabel}
-        onUpdateLabelInTasks={updateLabelInTasks}
-      />
+      <TaskModal onAddLabel={addLabel} onRemoveLabel={removeLabel} updateTask={updateTask}/>
     </>
   );
 }

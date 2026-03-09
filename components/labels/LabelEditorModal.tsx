@@ -19,23 +19,31 @@ const COLORS = [
   "#64748b",
 ];
 
+type LabelEditorModalProps = {
+  open: boolean;
+  onClose: () => void;
+  onSave: (name: string, color: string) => void | Promise<void>;
+  onDelete?: () => void | Promise<void>;
+  initialLabel?: {
+    id?: string;
+    name: string;
+    color: string;
+  } | null;
+};
+
 export default function LabelEditorModal({
   open,
   onClose,
   onSave,
   onDelete,
   initialLabel,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSave: (name: string, color: string) => void;
-  onDelete?: () => void;
-  initialLabel?: any;
-}) {
+}: LabelEditorModalProps) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(COLORS[0]);
 
   useEffect(() => {
+    if (!open) return;
+
     if (initialLabel) {
       setName(initialLabel.name);
       setColor(initialLabel.color);
@@ -43,12 +51,19 @@ export default function LabelEditorModal({
       setName("");
       setColor(COLORS[0]);
     }
-  }, [initialLabel]);
+  }, [initialLabel, open]);
 
-  function handleSave() {
+  async function handleSave() {
     if (!name.trim()) return;
 
-    onSave(name.trim(), color);
+    await onSave(name.trim(), color);
+    onClose();
+  }
+
+  async function handleDelete() {
+    if (!onDelete) return;
+
+    await onDelete();
     onClose();
   }
 
@@ -75,6 +90,7 @@ export default function LabelEditorModal({
             {COLORS.map((c) => (
               <button
                 key={c}
+                type="button"
                 onClick={() => setColor(c)}
                 style={{ backgroundColor: c }}
                 className={`w-6 h-6 rounded-full border ${
@@ -88,10 +104,7 @@ export default function LabelEditorModal({
           <div className="flex justify-between pt-2">
             {onDelete && (
               <button
-                onClick={() => {
-                  onDelete();
-                  onClose();
-                }}
+                onClick={handleDelete}
                 className="text-sm px-3 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50"
               >
                 Delete
