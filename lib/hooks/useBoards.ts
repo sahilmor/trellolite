@@ -115,6 +115,30 @@ export function useBoard(boardId: string) {
       }
     )
 
+    .on(
+  "postgres_changes",
+  {
+    event: "*",
+    schema: "public",
+    table: "task_labels",
+  },
+  () => {
+    loadBoard();
+  }
+)
+
+  .on(
+  "postgres_changes",
+  {
+    event: "*",
+    schema: "public",
+    table: "labels",
+  },
+  () => {
+    loadBoard();
+  }
+)
+
     .subscribe();
 
   return () => {
@@ -436,6 +460,8 @@ async function addLabel(taskId: string, label: Label) {
 async function removeLabel(taskId: string, labelId: string) {
   if (!supabase) return;
 
+  await labelServices.removeLabelFromTask(supabase, taskId, labelId);
+
   setColumns((prev) =>
     prev.map((col) => ({
       ...col,
@@ -448,6 +474,26 @@ async function removeLabel(taskId: string, labelId: string) {
             task.task_labels?.filter((l) => l.label_id !== labelId) || [],
         };
       }),
+    }))
+  );
+}
+
+function updateLabelInTasks(labelId: string, updates: Partial<Label>) {
+  setColumns((prev) =>
+    prev.map((col) => ({
+      ...col,
+      tasks: col.tasks.map((task) => ({
+        ...task,
+        task_labels:
+          task.task_labels?.map((tl) =>
+            tl.label_id === labelId
+              ? {
+                  ...tl,
+                  labels: { ...tl.labels, ...updates },
+                }
+              : tl
+          ) || [],
+      })),
     }))
   );
 }
@@ -468,5 +514,6 @@ async function removeLabel(taskId: string, labelId: string) {
     deleteColumn,
     addLabel,
     removeLabel,
+    updateLabelInTasks,
   };
 }

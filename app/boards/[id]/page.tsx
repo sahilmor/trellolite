@@ -62,6 +62,7 @@ export default function BoardPage() {
     deleteColumn,
     addLabel,
     removeLabel,
+    updateLabelInTasks,
   } = useBoard(id);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -756,6 +757,7 @@ const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
         boardId={board?.id || ""}
         onAddLabel={addLabel}
   onRemoveLabel={removeLabel}
+  onUpdateLabelInTasks={updateLabelInTasks}
       />
     </>
   );

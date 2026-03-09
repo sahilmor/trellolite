@@ -84,15 +84,19 @@ export function useLabels(boardId: string | null) {
   }
 
   async function updateLabel(labelId: string, name: string, color: string) {
-    if (!supabase) return;
+  if (!supabase) return;
 
-    const updated = await labelServices.updateLabel(supabase, labelId, {
-      name,
-      color,
-    });
+  const updated = await labelServices.updateLabel(supabase, labelId, {
+    name,
+    color,
+  });
 
-    setLabels((prev) => prev.map((l) => (l.id === labelId ? updated : l)));
-  }
+  setLabels((prev) =>
+    prev.map((l) => (l.id === labelId ? { ...l, ...updated } : l))
+  );
+
+  await loadLabels(); // ensures latest label state
+}
 
   async function deleteLabel(labelId: string) {
     if (!supabase) return;

@@ -13,7 +13,7 @@ export default function LabelPicker({
 }: {
   labels: any[];
   taskLabels: any[];
-  onAddLabel: (labelId: string) => Promise<void> | void
+  onAddLabel: (label: any) => Promise<void> | void
   onRemoveLabel: (labelId: string) => void;
   onCreateLabel: () => void;
   onEditLabel: (label: any) => void;
@@ -21,7 +21,7 @@ export default function LabelPicker({
   const [search, setSearch] = useState("");
 
   function isApplied(labelId: string) {
-    return taskLabels?.some((l) => l.labels.id === labelId);
+    return taskLabels?.some((l) => l.label_id === labelId);
   }
 
   const filteredLabels = labels.filter((label) =>

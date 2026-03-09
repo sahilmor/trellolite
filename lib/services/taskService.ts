@@ -7,22 +7,21 @@ export const taskServices = {
     boardId: string,
   ): Promise<Task[]> {
     const { data, error } = await supabase
-      .from("tasks")
-      .select(
-        `
-  *,
-  columns!inner(board_id),
-  task_labels (
-    labels (
-      id,
-      name,
-      color
-    )
-  )
-`,
+  .from("tasks")
+  .select(`
+    *,
+    columns!inner(board_id),
+    task_labels (
+      label_id,
+      labels (
+        id,
+        name,
+        color
       )
-      .eq("columns.board_id", boardId)
-      .order("sort_order", { ascending: true });
+    )
+  `)
+  .eq("columns.board_id", boardId)
+  .order("sort_order", { ascending: true });
 
     if (error) throw error;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Task } from "@/lib/supabase/models";
+import { Label, Task } from "@/lib/supabase/models";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +52,7 @@ export default function TaskModal({
   boardId,
   onAddLabel,
   onRemoveLabel,
+  onUpdateLabelInTasks,
 }: {
   task: Task | null;
   open: boolean;
@@ -60,6 +61,7 @@ export default function TaskModal({
   boardId: string;
   onAddLabel: (taskId: string, label: any) => Promise<void> | void;
   onRemoveLabel: (taskId: string, labelId: string) => Promise<void> | void;
+  onUpdateLabelInTasks: (labelId: string, updates: any) => void;
 }) {
   const { user } = useUser();
 
@@ -87,7 +89,6 @@ export default function TaskModal({
 
   useEffect(() => {
     if (task) {
-      setLocalTask(task);
       setTitle(task.title || "");
       setDescription(task.description || "");
       setAssignee(task.assignee || "");
@@ -96,6 +97,15 @@ export default function TaskModal({
       setEditingField(null);
     }
   }, [task]);
+
+  useEffect(() => {
+  if (!task) return;
+
+  setLocalTask({
+    ...task,
+    task_labels: task.task_labels || [],
+  });
+}, [task?.task_labels, task?.id]);
 
   if (!task) return null;
 
@@ -140,11 +150,10 @@ export default function TaskModal({
   });
 }
 
-  async function handleRemoveLabel(labelId: string) {
+async function handleRemoveLabel(labelId: string) {
   if (!localTask) return;
 
-  await onRemoveLabel(localTask.id, labelId);
-
+  // update modal state immediately
   setLocalTask((prev) => {
     if (!prev) return prev;
 
@@ -154,16 +163,46 @@ export default function TaskModal({
         prev.task_labels?.filter((l) => l.label_id !== labelId) || [],
     };
   });
+
+  // update board state
+  await onRemoveLabel(localTask.id, labelId);
 }
 
   function handleCreateLabel() {
     setEditingLabel(null);
     setLabelModalOpen(true);
   }
+  
+  function updateLocalTaskLabel(labelId: string, updates: Partial<Label>) {
+  setLocalTask((prev) => {
+    if (!prev) return prev;
+
+    return {
+      ...prev,
+      task_labels:
+        prev.task_labels?.map((tl) =>
+          tl.label_id === labelId
+            ? {
+                ...tl,
+                labels: {
+                  ...tl.labels,
+                  ...updates,
+                },
+              }
+            : tl
+        ) || [],
+    };
+  });
+}
 
   function isLabelApplied(labelId: string) {
-    return localTask?.task_labels?.some((l) => l.labels.id === labelId);
-  }
+  return localTask?.task_labels?.some((l) => l.label_id === labelId);
+}
+
+async function refreshTask() {
+  if (!localTask) return;
+  await onUpdateTask(localTask.id, {});
+}
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -305,7 +344,9 @@ export default function TaskModal({
                     {label.name}
 
                     <button
-                      onClick={() => handleRemoveLabel(item.label_id)}
+                      onClick={() =>
+                        handleRemoveLabel(item.label_id)
+                      }
                       className="ml-1"
                     >
                       <X size={10} />
@@ -446,13 +487,25 @@ export default function TaskModal({
         open={labelModalOpen}
         onClose={() => setLabelModalOpen(false)}
         initialLabel={editingLabel}
-        onSave={(name, color) => {
-          if (editingLabel) {
-            updateLabel(editingLabel.id, name, color);
-          } else {
-            createLabel(name, color);
-          }
-        }}
+        onSave={async (name, color) => {
+  if (editingLabel) {
+
+    await updateLabel(editingLabel.id, name, color);
+
+    onUpdateLabelInTasks(editingLabel.id, {
+      name,
+      color
+    });
+
+    updateLocalTaskLabel(editingLabel.id, {
+      name,
+      color
+    });
+
+  } else {
+    createLabel(name, color);
+  }
+}}
         onDelete={editingLabel ? () => deleteLabel(editingLabel.id) : undefined}
       />
     </Dialog>

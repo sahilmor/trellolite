@@ -66,7 +66,7 @@ export default function SortableTask({
 
                     return (
                       <span
-                        key={`${task.id}-${label.id}-${index}`}
+                        key={`${task.id}-${item.label_id}`}
                         style={{ backgroundColor: label.color }}
                         className="text-white text-[10px] px-2 py-[2px] rounded font-medium"
                       >
