@@ -17,17 +17,21 @@ export const boardServices = {
     return data;
   },
 
-  async getBoards(supabase: SupabaseClient, userId: string): Promise<Board[]> {
-    const { data, error } = await supabase
-      .from("boards")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+  async getBoards(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<Board[]> {
 
-    if (error) throw error;
+  const { data, error } = await supabase
+    .from("boards")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false });
 
-    return data || [];
-  },
+  if (error) throw error;
+
+  return data || [];
+},
 
   async createBoard(
     supabase: SupabaseClient,
@@ -115,6 +119,7 @@ export const boardDataServices = {
       description?: string;
       color?: string;
       userId: string;
+      workspaceId: string;
     }
   ) {
     const board = await boardServices.createBoard(supabase, {
@@ -122,6 +127,7 @@ export const boardDataServices = {
       description: boardData.description || null,
       color: boardData.color || "bg-blue-500",
       user_id: boardData.userId,
+      workspace_id: boardData.workspaceId,
     });
 
     const defaultColumns = [

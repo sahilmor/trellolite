@@ -1,3 +1,10 @@
+export interface Workspace {
+  id: string
+  name: string
+  owner_id: string
+  created_at: string
+}
+
 export interface Board {
     id: string;
     title: string;
@@ -6,6 +13,7 @@ export interface Board {
     user_id: string;
     created_at: string;
     updated_at: string;
+    workspace_id: string;
 }
 
 export interface Column {

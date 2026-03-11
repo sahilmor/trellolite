@@ -1,6 +1,5 @@
 "use client";
 
-import Navbar from "@/components/shared/navbar";
 import { useBoards } from "@/lib/hooks/useBoards";
 import { usePlan } from "@/lib/context/PlanContext";
 import { useState } from "react";
@@ -48,9 +47,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-
-      <Navbar />
-
       <main className="container mx-auto px-4 py-8">
 
         <DashboardHeader />

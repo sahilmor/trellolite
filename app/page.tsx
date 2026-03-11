@@ -1,4 +1,3 @@
-import Navbar from "@/components/shared/navbar";
 import { Button } from "@/components/ui/button";
 import { SignUpButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
@@ -23,9 +22,6 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen flex flex-col bg-linear-to-br from-blue-50 via-white to-purple-50">
-      {/* Navbar handles the top navigation and Sign In/Up buttons */}
-      <Navbar />
-
       <main className="flex-1 flex flex-col">
         {/* Hero Section */}
         <section className="w-full py-12 md:py-24 lg:py-32 xl:py-48 flex flex-col items-center text-center px-4">

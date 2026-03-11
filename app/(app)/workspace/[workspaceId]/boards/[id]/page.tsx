@@ -1,6 +1,5 @@
 "use client";
 
-import Navbar from "@/components/shared/navbar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -345,20 +344,6 @@ function handleDeleteColumn(column: typeof columns[number]) {
   return (
     <>
       <div className="min-h-screen bg-gray-50">
-        <Navbar
-          boardTitle={board?.title}
-          onEditBoard={() => {
-            setNewTitle(board?.title ?? "");
-            setNewColor(board?.color ?? "");
-            setIsEditingTitle(true);
-          }}
-          onFilterClick={() => setIsFilterOpen(true)}
-          filterCount={Object.values(filters).reduce(
-            (count, v) =>
-              count + (Array.isArray(v) ? v.length : v !== null ? 1 : 0),
-            0,
-          )}
-        />
 
         <Dialog open={isEditingTitle} onOpenChange={setIsEditingTitle}>
           <DialogContent className="w-[95vw] max-w-106.25 mx-auto">

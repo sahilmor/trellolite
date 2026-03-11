@@ -1,4 +1,3 @@
-import Navbar from "@/components/shared/navbar"
 import { PricingTable } from "@clerk/nextjs"
 
 export default function PricingPage() {

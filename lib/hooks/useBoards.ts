@@ -14,26 +14,28 @@ import { useSupabase } from "../supabase/SupabaseProvider";
 import { activityServices } from "../services/activityServices";
 import { labelServices } from "../services/labelServices";
 import { useBoardStore } from "@/store/boardStore";
+import { useWorkspace } from "./useWorkspace";
 
 export function useBoards() {
   const { user } = useUser();
   const { supabase } = useSupabase();
+  const { workspace } = useWorkspace();
   const [boards, setBoards] = useState<Board[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user && supabase) {
-      loadBoards();
-    }
-  }, [user, supabase]);
+    if (workspace && supabase) {
+  loadBoards();
+}
+  }, [workspace, supabase]);
 
   async function loadBoards() {
-    if (!user || !supabase) return;
+    if (!workspace || !supabase) return;
 
     try {
       setLoading(true);
-      const data = await boardServices.getBoards(supabase, user.id);
+      const data = await boardServices.getBoards(supabase, workspace.id);
       setBoards(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load boards");
@@ -48,12 +50,14 @@ export function useBoards() {
     color?: string;
   }) {
     if (!user || !supabase) throw new Error("User not authenticated");
+      if (!workspace) throw new Error("Workspace not found");
 
     const newBoard = await boardDataServices.createBoardWithDefaultColumns(
       supabase,
       {
         ...boardData,
         userId: user.id,
+        workspaceId: workspace.id, // default workspace ID for now, can be dynamic later
       },
     );
 
@@ -390,7 +394,7 @@ export function useBoard(boardId: string) {
     });
 
     await labelServices.removeLabelFromTask(supabase, taskId, labelId);
-    
+
     await activityServices.createActivity(supabase, {
       task_id: taskId,
       user_id: user.id,
